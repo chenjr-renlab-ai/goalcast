@@ -1,204 +1,167 @@
-# 预言者议会 · v4.2 详细改进规划
+# 预言者议会 · v4.3 全量改进规划
 **日期**: 2026-04-27
-**方法**: gstack 三轮完整迭代审查（系统审计 + CEO战略 + Eng架构 + Design视觉 + UX流程）
-**证据来源**: 实测 CSS 值 + 浏览器截图 + 代码逐行审读
+**综合自**: v4.0 失败案例分析 + v4.2 gstack 三轮技术审查
+**状态**: 规划文档，待实施
 
 ---
 
-## 一、实测数据汇总（审查原始证据）
+## 一、产品诊断：两个失败案例
+
+> 这是整个规划的"为什么"。不理解失败案例，所有技术改动都没有方向。
+
+### 失败案例1：新用户不知道在干什么
+
+用户加载页面后看到：6个卡通人物站在绿色圆圈里什么都不做，左右有一排名字卡，底部有"召开议会"按钮。**没有解释，没有引导，没有预期设置。**
+
+实际认知路径（通过用户观察还原）：
 
 ```
-视口:          1280×720（桌面）/ 375×812（移动）/ 768×1024（平板）
-body背景色:    rgb(3, 14, 6) = #030e06（深绿，未改蓝）
-agent-col宽:   CSS定义 122px，被下方 !important 覆盖为 148px（双重定义，代码混乱）
-scene canvas:  984px 宽（77% 视口）
-speech字号:    12.5px（极小）
-broadcast高:   190px（absolute 覆盖在 scene 上，非独立空间）
-prob-draw颜色: linear-gradient(#1a4a20, #1e6028, #156020) 深绿 on 深绿背景 → 几乎不可见
-移动端 overflow: true（水平溢出，完全不可用）
-平板端 overflow: true（同上）
-@media 断点:   0个（全文件没有一个响应式断点）
-console错误:   0个（news bug 已修）
-SSE关闭:       done/error时调用 close()，但 tab关闭/navigate-away 不会触发
+"这是一个游戏吗？"
+    ↓ 点击"召开议会"
+"什么都没发生？哦，要等一下"
+    ↓ 等待 7-15 秒
+"文字出现了，是AI在说话"
+    ↓ 继续看
+"他们说的是什么依据？"
+    ↓ 找不到答案
+"看不到数字来源，不知道这些AI凭什么说"
+    ↓ 失去信任，下次不会再开
+```
+
+**核心问题**：用户第一印象是"游戏"，而不是"AI 数据分析"。3D卡通人形强化了游戏感，没有任何内容告诉用户这是基于真实足球数据的预测。
+
+### 失败案例2：看完但不信（最关键）
+
+试用用户原话：
+> **"看乐子可以，但是不会信，除非有更多依据，比如摆个数据or告诉我你怎么得到的"**
+
+这句话精准指出了 4 个具体的信任缺口：
+
+| # | 缺口 | 当前状态 | 本质问题 |
+|---|------|---------|---------|
+| 1 | 可见的数据依据 | 代码里有真实API数据，UI上看不到被引用 | 数据存在但不可见 |
+| 2 | 历史验证 | 准确率系统已实现，界面上完全不显示 | 功能存在但不暴露 |
+| 3 | 方法论说明 | 每个Agent有严格方法论定义，用户不知道 | 设计存在但不标注 |
+| 4 | 角色可信度 | Roblox风格人形让预测看起来像游戏 | 视觉语言破坏可信度 |
+
+**关键洞察**：这4个缺口都不需要增加新数据。所有数据已经在后端，问题是**没有在界面上让用户看到它存在**。
+
+---
+
+## 二、设计原则：可信娱乐的甜蜜点
+
+### 两个失败极端
+
+**极端A（过学术）**：加置信区间、p值、样本量 → 没人看完，连球迷都跑了。
+
+**极端B（过娱乐）**：纯卡通 + 弹幕梗词 + 角色喊话 → 看几场就腻了，且完全不可信。
+
+**当前产品位置**：走娱乐路线，但娱乐质量不够高，可信度为零。两边都没到达。
+
+### 参考的三个成功案例
+
+**ESPN 底部数字条** — 体育直播时角落实时滚动的球员数据。观众看比赛时不一定读数字，但*知道数字在那里*，这本身就建立了可信度。**密度本身是可信度信号**，不需要用户真的阅读每个数字。
+
+**虎扑大神分析帖** — "近5场主场战绩3W1D1L，对比客场2W1D2L，优势明显"。数字+口语化，有数据有观点，读起来不像报告。
+
+**Bloomberg Terminal** — 数字极其密集，但每个数字都是实时的、有来源的。这里的核心洞察：**不是把界面做得像 Bloomberg，而是学习"让数据可见"这一设计哲学**。
+
+### 核心设计原则
+
+> **不是"更学术"，而是"让数据可见"**
+
+方法论不需要解释，需要**标注**。数据不需要展开，需要**高亮**。历史记录不需要图表，需要**小徽章**。
+
+具体翻译：
+
+| ❌ 不要做的 | ✅ 要做的 |
+|-----------|---------|
+| 加"关于冰狗的方法论"解释段落 | 在每条发言旁加一行灰字："Poisson模型 · 进失球统计" |
+| 做准确率分析报表 | 在冰狗卡片上加"近10场：✓✓✗✓✓ 70%" |
+| 显示置信区间 | 让Agent说"模拟10000次，主胜52%"（已有，需视觉高亮） |
+| 加学术数据源说明段落 | 在发言底部加一行来源标签："football-data.org · 实时" |
+
+### Agent 权威感公式
+
+人类评论员的可信度来自：历史记录 + 专业背景 + 数据引用。
+
+AI Agent 的可信度同样来自这三件事，且**三件事的数据全部已有**，只需要显示出来：
+
+```
+历史记录 → 准确率徽章（✓✓✗✓✓ 70%）         ← /api/memory/profiles 已有数据
+专业背景 → 方法论标签（"Poisson · 进失球"）   ← AGENT_METHOD 常量已有
+数据引用 → 发言来源标签（灰色小字）           ← AGENT_METHOD_LABEL 定义即可
+```
+
+这三个视觉信号，不需要 Agent 说话更"学术"，只需要把已有信息**显示出来**。
+
+---
+
+## 三、实测技术数据（gstack 三轮审查原始证据）
+
+```
+日期: 2026-04-27
+视口: 1280×720（桌面）/ 375×812（移动）/ 768×1024（平板）
+
+布局实测:
+  body背景色:     rgb(3, 14, 6) = #030e06（深绿，应改蓝）
+  agent-col宽:    CSS 122px 被 !important 148px 覆盖（双重定义混乱）
+  scene canvas:   984px（77% 视口）
+  speech字号:     12.5px（极小）
+  broadcast高:    190px（absolute 覆盖在 scene 上）
+
+响应式:
+  @media 断点:    0个（零响应式设计）
+  移动端 overflow: true（375px 水平溢出，完全不可用）
+  平板端 overflow: true（768px 同上）
+  移动端 scene宽: 79px（基本消失）
+
+颜色对比度:
+  prob-draw:      linear-gradient(#1a4a20→#156020) on #030e06 → 对比度≈1.4:1（WCAG要求4.5:1）
+  
+可信度功能:
+  准确率徽章:     ❌ API已有，前端未显示
+  方法来源标签:   ❌ 未实现
+  数据引用高亮:   ❌ 后端无 dataPoints 字段
+
+代码异常:
+  H1: readCache 不过滤空数组（下次会复发）
+  H2: SSE tab关闭时不主动断开（烧token）
+  H3: FPL失败无降级提示（用户看到全"暂无"不知原因）
+  M1: agent-col CSS 双重定义（122px + 148px!important）
 ```
 
 ---
 
-## 二、架构问题清单（按严重度排序）
-
-### 🔴 高危（会导致功能失效或资源泄漏）
-
-**H1: readCache 不过滤空数组**
-- 文件: `dataFetcher.mjs:59-68`
-- 问题: `data.value` 为 `[]` 时返回非 null，下游认为有数据实际为空。上次人工清理了，下次 football-data 返回空还会重现
-- 修复:
-  ```javascript
-  // dataFetcher.mjs:66，在 return data.value 前加判断
-  if (Array.isArray(data.value) && data.value.length === 0) return null;
-  ```
-
-**H2: SSE 连接在页面卸载时不关闭**
-- 文件: `public/app.js:1005`
-- 问题: 用户切换标签/关闭窗口时 `currentEs.close()` 不会被调用，服务端议会进程继续运行完整5轮对话，消耗 Moonshot API token（约¥0.5-2/场）
-- 修复: `public/app.js` 在 `init()` 函数加：
-  ```javascript
-  window.addEventListener('beforeunload', () => currentEs?.close());
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && currentEs) currentEs.close();
-  });
-  ```
-
-**H3: FPL API 失败时无降级提示**
-- 文件: `server.mjs: enrichMatchBriefing()`
-- 问题: `fetchTeamFPLData` 失败返回 null，briefing 里 xg_note/news/tactical 全显示"暂无"，但用户看不到任何原因
-- 修复: 在 briefing 加 `_fplAvailable: !!(homeFPL || awayFPL)` 标志，前端据此显示小提示
-
-### 🟡 中危（影响体验但不崩溃）
-
-**M1: agent-col CSS 双重定义**
-- 文件: `public/style.css:246-251`（`width:122px`）和 `style.css:1564-1568`（`width:148px !important`）
-- 问题: 两处定义互相覆盖，`!important` 是代码坏味道，后期难维护
-- 修复: 删除第一处定义，只保留 `style.css:1564` 处的 148px（或统一改到 200px）
-
-**M2: prob-draw 颜色对比度严重不足**
-- 文件: `public/style.css:211-213`
-- 问题: `.prob-draw` 背景 `#1a4a20~#156020`（暗绿）和 body `#030e06`（更暗的绿）对比度约 1.4:1（WCAG 要求 4.5:1）
-- 修复:
-  ```css
-  /* style.css:211 */
-  .prob-draw {
-    background: linear-gradient(90deg, #4a7c20 0%, #5a9a28 50%, #4a7c20 100%);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 0 8px rgba(80,160,40,0.4);
-  }
-  ```
-  或改为金色（平局=金色更直觉：主蓝/平金/客红）
-
-**M3: broadcast panel speech 字号太小**
-- 文件: `public/style.css` 中 `.bc-speech`
-- 实测值: 12.5px
-- 修复: 改为 `font-size: 13.5px; line-height: 1.55`
-
-**M4: agent 卡片信息极度稀缺**
-- 文件: `public/app.js:358-369`（`createAgentCard` 函数）
-- 当前仅显示: icon + name + title + dot
-- 缺失: 历史准确率、当前预测立场、当前置信度
-- 这是可信度最大的单点问题
-
-### 🟢 低危（积累技术债）
-
-**L1: scene3d.js 人形比例**（没有找到明确的 head/body 比例参数，需要进一步看）
-**L2: Three.js 弃用警告**（r160 有警告，实际不会崩）
-**L3: liveMatches 内存存储无持久化**（重启清零，可接受）
+## 四、改动方案全集（按信任缺口对应）
 
 ---
 
-## 三、功能缺失清单（设计在代码里但 UI 不显示）
+### 【信任缺口1修复】历史验证可见
 
-| 功能 | 数据已有 | API 接口 | 前端缺失的地方 |
-|------|---------|---------|--------------|
-| Agent 历史准确率 | ✅ `.memory/long-term.json` | ✅ `GET /api/memory/profiles` | agent 卡片没有显示，`createAgentCard` 未调用接口 |
-| 方法来源标签 | ✅ `AGENT_METHOD` in agents.mjs | — | `updateBroadcast` 没有注入来源行 |
-| xG 数据 | ✅ `briefing.xg_note` | ✅ `GET /api/match/:id` | 只在 match drawer 里，发言时不显示 |
-| 伤病消息 | ✅ `briefing.news` | ✅ `GET /api/match/:id` | match drawer 里有，发言时 psych agent 会引用但用户看不到来源 |
-| 数据引用高亮 | ❌ 需后端加 `dataPoints` 字段 | — | 未实现 |
-| 议会立场汇总 | ✅ `blackboard.agentStances` | ✅ `GET /api/monitor` | 在 Evidence Board 有，但 agent 卡片上没有 |
+#### 改动 A：Agent 卡片加历史准确率 + 当前立场
 
----
+**对应失败案例2 缺口2：没有历史验证**
 
-## 四、详细改动方案
+**文件**: `public/app.js`
 
----
-
-### 改动 1：readCache 空数组防御
-**文件**: `dataFetcher.mjs`，函数 `readCache`（第 59-68 行）
+**Step A-1**：在 `init()` 函数（约第 340 行）并行拉取准确率
 
 ```javascript
-// 修改后：
-async function readCache(key) {
-  try {
-    const file = path.join(CACHE_DIR, `${key}.json`);
-    const raw = await fs.promises.readFile(file, 'utf-8');
-    const data = JSON.parse(raw);
-    if (data.expires <= Date.now()) return null;
-    // 拒绝空数组缓存，强制重新拉取
-    if (Array.isArray(data.value) && data.value.length === 0) return null;
-    return data.value;
-  } catch {
-    return null;
-  }
-}
-```
-
-**验证**: 往 `.cache/team-form-xxx.json` 写入 `{"expires":99999999999,"value":[]}` 再重启，确认被忽略
-
----
-
-### 改动 2：SSE 页面卸载时关闭
-**文件**: `public/app.js`，在 `init()` 函数末尾（约第 343 行附近）
-
-```javascript
-// 加在 init() 末尾
-window.addEventListener('beforeunload', () => {
-  if (currentEs) { currentEs.close(); currentEs = null; }
-});
-document.addEventListener('visibilitychange', () => {
-  // 用户切换标签页时关闭，防止后台继续耗费 API
-  if (document.hidden && currentEs) {
-    currentEs.close();
-    currentEs = null;
-  }
-});
-```
-
-**注意**: `visibilitychange` 在手机上更可靠（手机 `beforeunload` 不稳定）
-
----
-
-### 改动 3：概率条颜色修复
-**文件**: `public/style.css:211-213`
-
-平局段从暗绿改为金色（语义更清晰：主蓝=主胜，金=平局，红=客胜）：
-
-```css
-/* 修改前 */
-.prob-draw {
-  background: linear-gradient(90deg, #1a4a20, #1e6028, #156020);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
-}
-/* 修改后 */
-.prob-draw {
-  background: linear-gradient(90deg, #7a6010 0%, #b89020 50%, #7a6010 100%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 0 10px rgba(180,140,30,0.35);
-}
-```
-
-同时更新 `.prob-bar-teams span:nth-child(2)`（中间"平局"标签颜色）：
-```css
-/* style.css:1237 */
-.prob-bar-center-label { color: rgba(200,160,40,0.85) !important; }
-```
-
----
-
-### 改动 4：Agent 卡片——加历史准确率 + 当前立场
-
-**步骤 4-A**: `public/app.js` 启动时拉取准确率
-
-在 `init()` 函数里，和 `loadMatches()` 并行获取：
-```javascript
-// app.js init() 函数内，大约第 340 行
+// 在文件顶部约第 55 行，全局变量区
 let agentAccuracyProfiles = {};
+
+// init() 函数内，与 loadMatches() 并行：
 async function fetchAccuracyProfiles() {
   try {
     const r = await fetch('/api/memory/profiles');
     agentAccuracyProfiles = await r.json();
-  } catch { /* silent fail */ }
+  } catch { /* silent fail，无历史时显示"暂无记录" */ }
 }
-// 在 init() 里并行调用：
 await Promise.all([loadMatches(), fetchAccuracyProfiles()]);
 ```
 
-**步骤 4-B**: 修改 `createAgentCard` 函数（`app.js:357-370`）
+**Step A-2**：修改 `createAgentCard` 函数（`app.js:357-370`）
 
 ```javascript
 function createAgentCard(id) {
@@ -208,13 +171,19 @@ function createAgentCard(id) {
   div.id = `card-${id}`;
   div.style.setProperty('--agent-color', a.cssColor);
 
-  // 准确率徽章（来自 /api/memory/profiles）
   const prof = agentAccuracyProfiles[id];
-  const accHtml = prof && prof.total > 0
-    ? `<div class="ac-accuracy">
-         <span class="ac-acc-pct">${Math.round(prof.correct/prof.total*100)}%</span>
-         <span class="ac-acc-label">近${prof.total}场</span>
-       </div>`
+  const accHtml = (prof && prof.total > 0)
+    ? (() => {
+        // 生成 ✓✗ 图标串（最近5场）
+        const recentByType = Object.entries(prof.byType || {})
+          .flatMap(([outcome, s]) => Array(s.correct || 0).fill('✓').concat(Array((s.total - s.correct) || 0).fill('✗')))
+          .slice(0, 5).join('');
+        return `<div class="ac-accuracy">
+          <span class="ac-acc-icons">${recentByType || '─'}</span>
+          <span class="ac-acc-pct">${Math.round(prof.correct/prof.total*100)}%</span>
+          <span class="ac-acc-label">近${prof.total}场</span>
+        </div>`;
+      })()
     : `<div class="ac-accuracy ac-acc-empty">暂无记录</div>`;
 
   div.innerHTML = `
@@ -231,209 +200,334 @@ function createAgentCard(id) {
 }
 ```
 
-**步骤 4-C**: 在 `updateStance` 调用处更新 `ac-stance` DOM
+**Step A-3**：在 `updateProbFromMsg` 末尾同步更新立场指示器
 
-当前 `updateProbFromMsg(data)` 更新概率条时同步更新卡片立场：
 ```javascript
-// 在 updateProbFromMsg 函数末尾追加：
-function updateAgentStanceIndicator(agentId, pick, conf) {
+// 新增函数，在 updateProbFromMsg 后调用：
+function updateAgentStanceDisplay(agentId, pick, conf) {
   const el = document.getElementById(`stance-${agentId}`);
   if (!el) return;
   const icons = { home: '🏠', draw: '⚖️', away: '✈️' };
+  const pct = Math.round((conf || 0.5) * 100);
   el.innerHTML = pick
-    ? `<span class="stance-icon">${icons[pick]||'?'}</span><span class="stance-conf">${Math.round((conf||0.5)*100)}%</span>`
+    ? `<span class="stance-icon">${icons[pick]}</span><span class="stance-conf">${pct}%</span>`
     : '';
-  el.className = `ac-stance stance-${pick||'none'}`;
+  el.className = `ac-stance stance-${pick || 'none'}`;
 }
+// 在 handleMessage → updateProbFromMsg 调用链末尾插入：
+// updateAgentStanceDisplay(data.agentId, data.structured?.winner, data.structured?.confidence);
 ```
 
-**步骤 4-D**: 新增 CSS（`style.css`）
+**Step A-4**：新增 CSS（`style.css` 末尾）
 
 ```css
-/* agent-col 统一宽度（删除 style.css:246 的 122px，保留并修改 style.css:1564 的 148px） */
-.agent-col { width: 200px !important; }
+/* agent-col 宽度统一——删除 style.css:246 的 width:122px，在此改为 200px */
+.agent-col { width: 200px !important; gap: 5px !important; }
 
-/* 准确率徽章 */
 .ac-accuracy {
   font-size: 10px; text-align: center;
-  padding: 2px 4px 3px;
+  padding: 3px 4px; margin-top: 3px;
   border-top: 1px solid var(--border);
-  margin-top: 2px;
+  line-height: 1.4;
 }
-.ac-acc-pct { font-size: 13px; font-weight: 800; color: var(--gold-bright); }
-.ac-acc-label { color: var(--text-dim); margin-left: 3px; }
-.ac-acc-empty { color: var(--text-dim); font-style: italic; }
+.ac-acc-icons { font-size: 9px; letter-spacing: 1px; opacity: 0.8; display: block; }
+.ac-acc-pct   { font-size: 14px; font-weight: 900; color: var(--gold-bright); }
+.ac-acc-label { color: var(--text-dim); margin-left: 2px; font-size: 9px; }
+.ac-acc-empty { color: var(--text-dim); font-style: italic; font-size: 9px; }
 
-/* 立场指示器 */
 .ac-stance {
-  font-size: 11px; text-align: center;
-  padding: 3px 0; min-height: 20px;
-  transition: all 0.3s;
+  font-size: 11px; text-align: center; min-height: 22px;
+  padding: 2px 0; transition: all 0.3s;
 }
 .ac-stance .stance-icon { font-size: 14px; }
-.ac-stance .stance-conf { color: var(--text-sub); margin-left: 2px; }
-.stance-home { color: #60a5fa; }
-.stance-draw { color: var(--gold-bright); }
-.stance-away { color: #f87171; }
+.ac-stance .stance-conf { color: var(--text-sub); font-size: 10px; margin-left: 2px; }
+.stance-home { background: rgba(30,80,200,0.1); }
+.stance-draw { background: rgba(180,140,30,0.1); }
+.stance-away { background: rgba(200,30,50,0.1); }
 ```
 
 ---
 
-### 改动 5：broadcast 卡片加方法来源标签
+### 【信任缺口2修复】方法论可见
 
-**文件**: `public/app.js`，`updateBroadcast` 函数（约第 1345 行）
+#### 改动 B：每条发言加方法来源标签
 
-在 `app.js` 顶部加常量（约第 50 行附近）：
+**对应失败案例2 缺口3：没有方法论说明**
+
+**文件**: `public/app.js`，在文件顶部约第 50 行加常量，在 `updateBroadcast` 函数里插入
+
 ```javascript
+// app.js 顶部常量（约第 55 行）
 const AGENT_METHOD_LABEL = {
-  stat:      'Poisson · football-data进失球',
-  gambler:   '盘口信号 · the-odds-api赔率',
-  history:   '历史情景 · football-data H2H',
-  psych:     '语义分析 · FPL球员状态',
-  mystic:    '舆情叙事 · 市场情绪',
+  stat:      'Poisson模型 · football-data 进失球',
+  gambler:   '跨平台盘口 · the-odds-api 赔率',
+  history:   '历史情景匹配 · football-data H2H',
+  psych:     '语义情绪分析 · FPL 球员状态',
+  mystic:    '舆情叙事检测 · 市场情绪',
   moderator: '综合裁判',
 };
 ```
 
-在 `updateBroadcast` 函数的 `card.innerHTML` 里，在 `bc-top-row` 之前插入来源标签：
+在 `updateBroadcast` 函数的 `bc-content` 里，`bc-top-row` **之前**插入：
+
 ```javascript
-// 在 card.innerHTML 的 bc-content 里，bc-top-row 之前加：
-<div class="bc-method-label">${AGENT_METHOD_LABEL[data.agentId]||''}</div>
+// card.innerHTML 里的 bc-content，在 bc-top-row 前加一行：
+`<div class="bc-source-layer">
+  <span class="bc-source-icon">📡</span>
+  ${AGENT_METHOD_LABEL[data.agentId] || ''}
+</div>`
 ```
 
-新增 CSS：
+**新增 CSS**：
+
 ```css
-.bc-method-label {
-  font-size: 10px;
-  color: var(--text-dim);
-  letter-spacing: 0.3px;
-  margin-bottom: 4px;
-  padding: 0 0 3px;
+.bc-source-layer {
+  font-size: 10px; color: var(--text-dim);
+  padding: 0 0 4px; margin-bottom: 4px;
   border-bottom: 1px solid var(--border);
+  letter-spacing: 0.3px;
 }
+.bc-source-icon { font-size: 9px; margin-right: 3px; opacity: 0.6; }
 ```
 
 ---
 
-### 改动 6：phase 阶段指示器加说明文字
+### 【信任缺口3修复】数据依据可见
 
-**文件**: `public/app.js`，`appendPhaseBanner` 函数（约第 1430 行）
+#### 改动 C：broadcast 卡片三层视觉结构
 
-当前 `.phase-step` 只显示"开场/初判/对线/终投"，没有说明。在 banner 加一行子标题：
+**对应失败案例2 缺口1：没有可见的数据依据**
+
+三层结构将现有内容重组为可感知的信息层次，不增加任何新内容：
+
+```
+层1（灰色小字）：方法来源标签     ← "告诉我你怎么得到的"
+层2（主文本）：  发言内容         ← 已有
+层3（金色高亮）：catchphrase金句  ← 已有但缺视觉强调
+```
+
+修改 `updateBroadcast` 里 `bc-content` 的 `.bc-catchphrase` 样式（CSS 而非代码改动）：
+
+```css
+/* 金句层：视觉强度大幅提升，成为可截图的亮点 */
+.bc-catchphrase {
+  margin-top: 6px;
+  font-size: 12.5px; font-weight: 700;
+  color: var(--gold-bright); font-style: italic;
+  padding: 4px 8px;
+  border-left: 3px solid var(--gold);
+  background: var(--gold-dim);
+  border-radius: 0 3px 3px 0;
+  line-height: 1.4;
+}
+/* 场景预测：用分镜感字体处理 */
+.bc-scene {
+  margin-top: 5px;
+  font-size: 11.5px; color: var(--text-sub);
+  font-style: italic; line-height: 1.5;
+  border-top: 1px solid var(--border); padding-top: 4px;
+}
+/* 主发言文字稍加大 */
+.bc-speech { font-size: 13.5px !important; line-height: 1.55 !important; }
+```
+
+---
+
+### 【失败案例1修复】新用户引导
+
+#### 改动 D：3步引导浮层（Onboarding）
+
+**对应失败案例1：新用户不知道在干什么**
+
+条件：`localStorage.getItem('oracle_visited')` 为 null 时显示（首次访问）。
+
+在 `public/index.html` body 末尾加：
+
+```html
+<div id="onboardingOverlay" class="onb-overlay" style="display:none">
+  <div class="onb-panel">
+    <div class="onb-steps">
+      <div class="onb-step active" id="onb-1">
+        <div class="onb-num">1</div>
+        <div class="onb-icon">⚽</div>
+        <div class="onb-title">选一场真实比赛</div>
+        <div class="onb-desc">英超赛程实时拉取，赔率来自 bet365，球员数据来自 Fantasy Premier League</div>
+      </div>
+      <div class="onb-step" id="onb-2">
+        <div class="onb-num">2</div>
+        <div class="onb-icon">🎯</div>
+        <div class="onb-title">先亮出你的比分预测</div>
+        <div class="onb-desc">议会开始前你先押注——看最后是你准还是 AI 准</div>
+      </div>
+      <div class="onb-step" id="onb-3">
+        <div class="onb-num">3</div>
+        <div class="onb-icon">⚔️</div>
+        <div class="onb-title">6个 AI 角色用不同数据辩论</div>
+        <div class="onb-desc">冰狗用 Poisson 模型，赌狗看盘口资金，碎碎念分析采访文本——方法不同，结论不同，你来判断谁说得对</div>
+      </div>
+    </div>
+    <button id="onbStart" class="onb-btn">开始观战 →</button>
+    <div class="onb-skip" id="onbSkip">跳过引导</div>
+  </div>
+</div>
+```
+
+`public/app.js` 里在 `init()` 加：
+
 ```javascript
-const phaseDesc = {
-  opening: '议长开场',
-  initial: '5位专家独立分析，各凭私有数据',
-  debate:  `${meta?.agentA ? AGENTS[meta.agentA]?.name : '?'} vs ${meta?.agentB ? AGENTS[meta.agentB]?.name : '?'} 方法论碰撞`,
-  vote:    '终极裁决——是否被对线说服？',
-  reaction: '最大分歧方互怼',
-};
+function checkOnboarding() {
+  if (!localStorage.getItem('oracle_visited')) {
+    document.getElementById('onboardingOverlay').style.display = 'flex';
+  }
+}
+document.getElementById('onbStart')?.addEventListener('click', () => {
+  localStorage.setItem('oracle_visited', '1');
+  document.getElementById('onboardingOverlay').style.display = 'none';
+});
+document.getElementById('onbSkip')?.addEventListener('click', () => {
+  localStorage.setItem('oracle_visited', '1');
+  document.getElementById('onboardingOverlay').style.display = 'none';
+});
+// 在 init() 末尾调用：
+checkOnboarding();
+```
+
+CSS（渐进步骤动画，简洁）：
+
+```css
+.onb-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(1,7,20,0.92); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+}
+.onb-panel {
+  max-width: 520px; width: 90%;
+  background: var(--bg-card); border: 1px solid var(--border-gold);
+  border-radius: 12px; padding: 32px 28px; text-align: center;
+}
+.onb-steps { display: flex; gap: 12px; margin-bottom: 28px; }
+.onb-step {
+  flex: 1; padding: 16px 10px; border-radius: 8px;
+  border: 1px solid var(--border); opacity: 0.5; transition: all 0.3s;
+}
+.onb-step.active { opacity: 1; border-color: var(--gold); background: var(--gold-dim); }
+.onb-num { font-size: 10px; color: var(--text-dim); margin-bottom: 6px; }
+.onb-icon { font-size: 28px; margin-bottom: 8px; }
+.onb-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.onb-desc { font-size: 11px; color: var(--text-sub); line-height: 1.5; }
+.onb-btn {
+  width: 100%; padding: 12px; font-size: 16px; font-weight: 700;
+  background: linear-gradient(90deg, var(--wc-green), var(--gold));
+  border: none; border-radius: 8px; color: #000; cursor: pointer;
+  margin-bottom: 10px; transition: opacity 0.2s;
+}
+.onb-btn:hover { opacity: 0.9; }
+.onb-skip { font-size: 11px; color: var(--text-dim); cursor: pointer; }
+.onb-skip:hover { color: var(--text-sub); }
 ```
 
 ---
 
-### 改动 7：移动端响应式（最低可用性保障）
+### 【技术修复】工程稳定性
 
-**文件**: `public/style.css` 末尾追加
+#### 改动 E：readCache 空数组防御
+
+**文件**: `dataFetcher.mjs:59-68`
+
+```javascript
+async function readCache(key) {
+  try {
+    const file = path.join(CACHE_DIR, `${key}.json`);
+    const raw = await fs.promises.readFile(file, 'utf-8');
+    const data = JSON.parse(raw);
+    if (data.expires <= Date.now()) return null;
+    if (Array.isArray(data.value) && data.value.length === 0) return null; // 拒绝空数组
+    return data.value;
+  } catch {
+    return null;
+  }
+}
+```
+
+#### 改动 F：SSE 页面卸载时关闭
+
+**文件**: `public/app.js`，`init()` 函数末尾
+
+```javascript
+window.addEventListener('beforeunload', () => { currentEs?.close(); currentEs = null; });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && currentEs) { currentEs.close(); currentEs = null; }
+});
+```
+
+#### 改动 G：概率条平局段对比度修复
+
+**文件**: `public/style.css:211-213`
+
+将 prob-draw 从几乎不可见的暗绿改为金色（语义也更清晰：主蓝/平金/客红）：
 
 ```css
-/* ========== 响应式断点 ========== */
-@media (max-width: 767px) {
-  /* 隐藏 3D 场景 */
-  .game-arena { flex-direction: column; }
-  #threeCanvas, .scene-container { display: none !important; }
-
-  /* agent 列横向排列，变小 */
-  .agent-col {
-    width: 100% !important;
-    flex-direction: row !important;
-    flex-wrap: wrap;
-    height: auto !important;
-  }
-  .agent-card { width: 46%; flex-shrink: 0; }
-
-  /* broadcast 填满 */
-  .broadcast-panel {
-    position: relative !important;
-    height: auto !important;
-    max-height: 60vh;
-  }
-
-  /* topbar 压缩 */
-  .top-bar { height: 44px; }
-  .tb-left { display: none; } /* 隐藏 ORACLE COUNCIL logo */
-}
-
-@media (min-width: 768px) and (max-width: 1023px) {
-  /* 平板：3D 压缩到 50%，释放空间给 agent 列 */
-  .agent-col { width: 160px !important; }
-  #threeCanvas { width: 400px !important; }
-  .broadcast-panel { bottom: 0; }
+.prob-draw {
+  background: linear-gradient(90deg, #7a6010 0%, #b89020 50%, #7a6010 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 0 10px rgba(180,140,30,0.35);
 }
 ```
 
 ---
 
-### 改动 8：色调调整（深绿 → 深蓝）
+### 【视觉语言改造】脱离"游戏感"
 
-**文件**: `public/style.css:1-44`（CSS 变量 + body 背景）
+#### 改动 H：色调从深绿改深蓝
 
-这是最大的视觉变化，改变整体氛围：
+**对应失败案例2 缺口4：3D玩具角色破坏可信度（色调是起点）**
+
+深绿色调传达"电竞游戏"，深蓝传达"数据分析/专业媒体"。参考：Sky Sports直播间（深蓝+白字+蓝金）。
+
+**文件**: `public/style.css:6-60`
 
 ```css
-/* 修改 :root 里的背景变量（style.css:6-44） */
 :root {
-  --bg-base:   #010714;   /* 深蓝（原 #030d07 深绿） */
-  --bg-panel:  #020a18;   /* 深蓝面板（原 #050f09） */
-  --bg-card:   #041020;   /* 深蓝卡片（原 #081409） */
-  --bg-input:  #061828;   /* 深蓝输入（原 #0a1a0c） */
-  --border:    rgba(30,80,200,0.12);   /* 蓝色边框 */
+  --bg-base:   #010714;
+  --bg-panel:  #020a18;
+  --bg-card:   #041020;
+  --bg-input:  #061828;
+  --border:    rgba(30,80,200,0.12);
   --border-md: rgba(30,80,200,0.22);
 }
 
-/* body 背景（style.css:49-60） */
 body {
   background: #010714;
   background-image:
     radial-gradient(ellipse 130% 45% at 50% 0%, rgba(20,60,180,0.4) 0%, transparent 55%),
     radial-gradient(ellipse 140% 40% at 50% 105%, rgba(0,80,160,0.20) 0%, transparent 55%),
     radial-gradient(ellipse 35% 90% at 0% 50%, rgba(10,40,100,0.15) 0%, transparent 60%),
-    radial-gradient(ellipse 35% 90% at 100% 50%, rgba(10,40,100,0.15) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 50% 60%, rgba(5,30,80,0.18) 0%, transparent 70%);
+    radial-gradient(ellipse 35% 90% at 100% 50%, rgba(10,40,100,0.15) 0%, transparent 60%);
 }
-```
 
-同时去掉 `body::before` 里的足球六边形绿色水印（改蓝或删除）：
-```css
+/* body::before 六边形水印改蓝 */
 body::before {
-  /* 改为细蓝线六边形 */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='52' viewBox='0 0 60 52'%3E%3Cpolygon points='30,2 58,17 58,35 30,50 2,35 2,17' fill='none' stroke='rgba(30,80,200,0.03)' stroke-width='1'/%3E%3C/svg%3E");
 }
 ```
 
----
+#### 改动 I：概率条改为拔河绳（SVG）
 
-### 改动 9：概率条 → 拔河绳（SVG 版）
+**对应"预测是动态博弈"而非"静态结果"的设计目标**
 
-**文件**: `public/index.html`（替换概率条 DOM）+ `public/app.js`（更新逻辑）+ `public/style.css`（新增样式）
+**文件**: `public/index.html:47-63`，`public/app.js`（`updateProbBar` 函数约第 544 行），`public/style.css`
 
-**Step 9-A**: `index.html:47-63`，替换 `.prob-bar-track` 内容
+**Step I-1**：index.html 替换 `.prob-bar-track` 为 SVG
 
 ```html
-<!-- 保留 .prob-bar-wrap 外层，替换 .prob-bar-track 为 SVG -->
 <div class="prob-bar-track" id="probBarTrack">
-  <svg class="tug-svg" viewBox="0 0 800 36" preserveAspectRatio="none" id="tugSvg">
-    <!-- 绳子底色 -->
+  <svg class="tug-svg" viewBox="0 0 800 36" id="tugSvg">
     <rect x="0" y="15" width="800" height="6" rx="3" fill="rgba(255,255,255,0.08)"/>
-    <!-- 主队段（蓝） -->
     <rect id="tugHome" x="0" y="13" width="370" height="10" rx="3" fill="url(#tugGradHome)"/>
-    <!-- 客队段（红） -->
     <rect id="tugAway" x="430" y="13" width="370" height="10" rx="3" fill="url(#tugGradAway)"/>
-    <!-- 绳结（金色圆，位置=当前主胜概率×800） -->
-    <circle id="tugKnot" cx="400" cy="18" r="9" fill="#c8a832" stroke="#f0d060" stroke-width="1.5"/>
-    <!-- 平局区域标记 -->
-    <rect x="370" y="10" width="60" height="16" rx="3" fill="rgba(180,140,30,0.15)" stroke="rgba(200,160,40,0.3)" stroke-width="1"/>
-    <!-- 渐变定义 -->
+    <rect x="370" y="10" width="60" height="16" rx="3"
+          fill="rgba(180,140,30,0.12)" stroke="rgba(200,160,40,0.3)" stroke-width="1"/>
+    <circle id="tugKnot" cx="400" cy="18" r="9"
+            fill="#c8a832" stroke="#f0d060" stroke-width="1.5"/>
     <defs>
       <linearGradient id="tugGradHome" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0%" stop-color="#0e3a7a"/>
@@ -445,7 +539,6 @@ body::before {
       </linearGradient>
     </defs>
   </svg>
-  <!-- 保留数值显示 -->
   <div class="tug-values">
     <span id="probValHome" class="tug-val tug-home">33%</span>
     <span id="probValDraw" class="tug-val tug-draw">34%</span>
@@ -454,7 +547,7 @@ body::before {
 </div>
 ```
 
-**Step 9-B**: `public/app.js`，修改 `updateProbBar()` 函数（约第 544-575 行）
+**Step I-2**：app.js 替换 `updateProbBar()` 函数
 
 ```javascript
 function updateProbBar() {
@@ -462,230 +555,269 @@ function updateProbBar() {
   const knot = document.getElementById('tugKnot');
   const tugHome = document.getElementById('tugHome');
   const tugAway = document.getElementById('tugAway');
-  if (!knot) return;
+  if (!knot) { /* 旧版 prob-seg 降级逻辑保留 */ return; }
 
-  // 绳结位置：home/(home+away) 决定左右偏移
-  // 0% = 完全客队，50% = 平局，100% = 完全主队
   const bias = home / (home + away + 0.001);
   const cx = Math.round(bias * 800);
-
-  // CSS transition 让绳结平滑移动
-  knot.style.transition = 'cx 0.8s cubic-bezier(.4,0,.2,1)';
   knot.setAttribute('cx', cx);
+  tugHome?.setAttribute('width', Math.max(0, cx - 9));
+  tugAway?.setAttribute('x', Math.min(800, cx + 9));
+  tugAway?.setAttribute('width', Math.max(0, 800 - Math.min(800, cx + 9)));
 
-  // 主队段宽度
-  const homeW = Math.max(0, cx - 9);
-  tugHome?.setAttribute('width', homeW);
-
-  // 客队段位置和宽度
-  const awayX = Math.min(800, cx + 9);
-  tugAway?.setAttribute('x', awayX);
-  tugAway?.setAttribute('width', Math.max(0, 800 - awayX));
-
-  // 数值显示
   document.getElementById('probValHome').textContent = `${Math.round(home)}%`;
-  document.getElementById('probValDraw').textContent = `${Math.round(draw)}%`;
+  document.getElementById('probValDraw').textContent  = `${Math.round(draw)}%`;
   document.getElementById('probValAway').textContent = `${Math.round(away)}%`;
 
-  // 每次更新后触发抖动动画
+  // 弹跳动画（reflow trick）
   knot.classList.remove('tug-bounce');
-  void knot.offsetWidth; // reflow
+  void knot.offsetWidth;
   knot.classList.add('tug-bounce');
 }
 ```
 
-**Step 9-C**: 新增 CSS
+**Step I-3**：新增 CSS
 
 ```css
 .tug-svg { width: 100%; height: 36px; display: block; }
-.tug-values { display: flex; justify-content: space-between; margin-top: 4px; }
+#tugKnot { transition: none; } /* JS 直接控制，不需要 CSS transition */
+.tug-values { display: flex; justify-content: space-between; margin-top: 4px; padding: 0 4px; }
 .tug-val { font-size: 11px; font-weight: 800; }
 .tug-home { color: #60a5fa; }
 .tug-draw { color: var(--gold-bright); }
 .tug-away { color: #f87171; }
 
-/* 绳结弹性动画 */
-@keyframes tugBounce {
-  0%   { r: 9; }
-  30%  { r: 13; }
-  60%  { r: 7; }
-  80%  { r: 11; }
-  100% { r: 9; }
-}
+@keyframes tugBounce { 0%{r:9} 30%{r:13} 60%{r:7} 80%{r:11} 100%{r:9} }
 #tugKnot.tug-bounce { animation: tugBounce 0.5s ease; }
 ```
 
----
+#### 改动 J：阶段指示器加说明文字
 
-### 改动 10：broadcast 卡片三层结构
+**对应失败案例1：不知道下一步会发生什么**
 
-**文件**: `public/app.js:updateBroadcast`（约第 1350-1400 行）
+**文件**: `public/app.js`，`appendPhaseBanner` 函数（约第 1430 行）
 
-当前结构：compact-line + body-wrap（portrait + content）
-目标结构：compact-line + body-wrap（portrait + content[来源层/内容层/金句层]）
-
-修改 `card.innerHTML` 里的 `bc-content` 部分：
 ```javascript
-// bc-content 内部改为：
-`<div class="bc-content">
-  <div class="bc-top-row">
-    <div class="bc-agent-name">${escapeHtml(agent.name)}</div>
-    <span class="bc-phase-badge ${badgeCls}">${phaseLabel}</span>
-  </div>
-  <!-- 层1：方法来源（灰小字） -->
-  <div class="bc-source-layer">${AGENT_METHOD_LABEL[data.agentId]||''}</div>
-  <!-- 层2：发言内容（主文本） -->
-  <div class="bc-speech">${speech}</div>
-  <!-- 层3：金句（金色高亮） -->
-  ${data.catchphrase ? `<div class="bc-catchphrase">${escapeHtml(data.catchphrase)}</div>` : ''}
-  ${data.scenePrediction ? `<div class="bc-scene">${escapeHtml(data.scenePrediction)}</div>` : ''}
-  ${data.predictionTag ? `<span class="bc-tag">${escapeHtml(data.predictionTag)}</span>` : ''}
-</div>`
+// 在函数顶部加常量：
+const PHASE_DESC = {
+  opening:  '议长开场，介绍今日交锋焦点',
+  initial:  '5位专家独立初判，各自只看私有数据',
+  reaction: `分歧最大的两方互怼方法论`,
+  debate:   (meta) => `${AGENTS[meta?.agentA]?.name||'?'} vs ${AGENTS[meta?.agentB]?.name||'?'} · 方法论碰撞`,
+  vote:     '终极裁决——是否被对线内容说服？',
+};
 ```
 
-新增 CSS：
+在 banner HTML 里加子标题：
+
+```javascript
+// phase-banner 的 innerHTML 里追加：
+`<div class="phase-desc">${
+  typeof PHASE_DESC[phase] === 'function'
+    ? PHASE_DESC[phase](meta)
+    : (PHASE_DESC[phase] || '')
+}</div>`
+```
+
 ```css
-.bc-source-layer {
-  font-size: 10px;
-  color: var(--text-dim);
-  padding-bottom: 4px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--border);
-  letter-spacing: 0.3px;
+.phase-desc { font-size: 10px; color: var(--text-dim); margin-top: 2px; letter-spacing: 0.3px; }
+```
+
+---
+
+### 【响应式修复】移动端基本可用
+
+#### 改动 K：响应式断点（零到有）
+
+**文件**: `public/style.css` 末尾追加（当前文件内 0 个 @media 查询）
+
+```css
+/* ===== 移动端（≤767px）===== */
+@media (max-width: 767px) {
+  body { overflow-y: auto; }
+  .game-arena { flex-direction: column; overflow: visible; }
+
+  /* 隐藏 3D（移动端 canvas 变成 79px 宽，毫无意义） */
+  #threeCanvas { display: none !important; }
+
+  /* agent 列变水平滚动条 */
+  .agent-col {
+    width: 100% !important; height: auto !important;
+    flex-direction: row !important; overflow-x: auto;
+    padding: 6px 8px; gap: 8px;
+    border-right: none !important; border-left: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+  .agent-card { min-width: 130px; flex-shrink: 0; }
+
+  /* broadcast 从 absolute 变 relative，填满屏幕 */
+  .broadcast-panel {
+    position: relative !important; bottom: auto !important;
+    height: 55vh !important; overflow-y: auto;
+  }
+
+  /* 顶栏压缩 */
+  .top-bar { height: 46px; }
+  .tb-left { display: none; }
+  .tb-center { gap: 6px; }
+  .tb-odds-row { gap: 6px; }
 }
-/* 金句层更突出 */
-.bc-catchphrase {
-  margin-top: 5px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--gold-bright);
-  font-style: italic;
-  padding: 3px 6px;
-  border-left: 2px solid var(--gold);
-  background: var(--gold-dim);
+
+/* ===== 平板（768px-1023px）===== */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .agent-col { width: 160px !important; }
+  #threeCanvas { max-width: 400px !important; }
 }
 ```
 
 ---
 
-## 五、实施路线（按轮次）
+## 五、改动优先级矩阵
 
-### 第一轮：基础修复（今天，约1-2小时）
-按顺序：H1 → H2 → M2 → M3
-
-| # | 改动 | 文件 | 行 | 时间估算 |
-|---|------|------|----|---------|
-| 1 | readCache 空数组防御 | dataFetcher.mjs | 66 | 5min |
-| 2 | SSE beforeunload/visibilitychange | app.js | ~343 | 10min |
-| 3 | prob-draw 颜色修复（改金色） | style.css | 211-213 | 5min |
-| 4 | bc-speech 字号 12.5→13.5px | style.css | 找.bc-speech | 5min |
-| 5 | agent-col CSS 双重定义清理 | style.css | 246+1564 | 10min |
-
-验收：`$B console --errors` 零错误；概率条平局段清晰可见；broadcast 文字更易读
-
-### 第二轮：可信度信号注入（1-2天）
-改动 4（agent 准确率徽章）+ 改动 5（方法来源标签）+ 改动 6（阶段说明文字）
-
-这三个改动是**最高单点可信度提升**，且不改布局不影响 3D 场景，风险最低。
-
-验收：每个 agent 卡片显示准确率（或"暂无记录"）；每条 broadcast 发言下方显示灰色来源行
-
-### 第三轮：视觉语言（3-5天）
-改动 8（深蓝色调）+ 改动 9（拔河绳）+ 改动 10（三层卡片）
-
-颜色改动影响面最广，建议先在 Chrome DevTools 实时预览，确认所有元素协调后再改 CSS 文件。
-
-验收：背景 `rgb(1,7,20)` 附近；拔河绳随发言实时移动+弹跳；catchphrase 金色突出
-
-### 第四轮：布局与响应式（5-7天）
-改动 7（响应式断点）+ agent-col 扩宽到 200px
-
-移动端验收：375px 视口无水平溢出，主要内容可读；议会广播区域占屏幕 ≥60%
-
-### 第五轮：深度功能（1-2周）
-- 改动 11：`submit_speech` tool 加 `dataPoints: [{field, value}]` 字段 → 前端数据引用高亮
-- 改动 12：右侧数据引用面板（需先完成改动 11）
-- 改动 13：新用户3步引导浮层（条件：用户第一次访问，`localStorage` 里没有 `oracle_visited` 标志）
+| 改动 | 对应失败案例 | 预期收益 | 实施难度 | 优先级 |
+|------|-----------|---------|---------|--------|
+| E：readCache空数组防御 | 数据质量 | 防复发 | 5min | **P0 今天** |
+| F：SSE关闭泄漏 | 成本控制 | 止血 | 10min | **P0 今天** |
+| G：prob-draw对比度 | 视觉可读 | 立即可见 | 5min | **P0 今天** |
+| B：方法来源标签 | 失败2·缺口3 | 高信任度 | 30min | **P1 本周** |
+| A：准确率徽章 | 失败2·缺口2 | 高信任度 | 1-2h | **P1 本周** |
+| C：三层发言结构 | 失败2·缺口1 | 高信任度 | 1h | **P1 本周** |
+| J：阶段说明文字 | 失败1 | 中引导效果 | 30min | **P1 本周** |
+| D：Onboarding | 失败1 | 高新用户留存 | 2-3h | **P2 下周** |
+| I：拔河绳概率条 | 戏剧感 | 高娱乐性 | 3-4h | **P2 下周** |
+| H：色调深绿→深蓝 | 失败2·缺口4 | 高专业感 | 2h | **P2 下周** |
+| K：响应式断点 | 移动端可用 | 高覆盖率 | 3-4h | **P3 本轮内** |
 
 ---
 
-## 六、改动 9 的数据流说明（拔河绳）
+## 六、实施路线
+
+### 第一轮：止血 + 快赢（今天，约1小时）
+
+3个高优先级 bug fix，改完立刻有效：
 
 ```
-SSE message 事件
-  → handleMessage(data)
-    → updateProbFromMsg(data)
-      → 更新 probState.homeW / drawW / awayW
-      → 归一化为 home/draw/away 百分比
-        → updateProbBar()
-          → 计算 bias = home/(home+away)
-          → 更新 SVG #tugKnot cx 值（0~800）
-          → CSS transition: cx 0.8s → 平滑滑动
-          → 添加 .tug-bounce → 弹跳动画
-          → 更新三个数值文本
-
-SSE blackboard_update 事件
-  → 同样触发 updateProbBar()（已有此逻辑）
-
-SSE summary 事件（议会结束）
-  → handleSummary()
-    → 用最终 results.home/draw/away 固定绳结位置
-    → 绳结停止动画（移除 .tug-bounce 类）
+E → F → G（顺序执行，每个5-10分钟）
+完成后：服务器不再泄漏token；概率条清晰可见
 ```
 
-SVG 的 `cx` 属性不支持直接 CSS transition（需要 SMIL 或 JS 动画），最稳定的方法是用 JS 直接 `setAttribute`（上方代码已是此方案）。绳结的 `r` 属性弹跳用 CSS `@keyframes` + class 切换，需要 reflow trick（`void el.offsetWidth`）。
+### 第二轮：可信度信号（1-2天）
+
+**这是失败案例2的直接解法，最高单点 ROI：**
+
+```
+B（方法来源标签，30min）
+→ A（准确率徽章，2h，依赖 /api/memory/profiles）
+→ C（三层发言结构样式，1h）
+→ J（阶段说明文字，30min）
+```
+
+完成后：用户能看到"这是 Poisson 模型，进失球数据来自 football-data.org"，能看到"Dr.冰狗近8场70%准确率"——失败案例2的核心信任缺口被封堵。
+
+### 第三轮：用户体验语言（3-5天）
+
+```
+H（色调深蓝）→ I（拔河绳）→ D（Onboarding）
+```
+
+色调改动影响面最广，建议先在 DevTools 里预览确认所有元素协调，再提交。
+
+### 第四轮：覆盖率（5-7天）
+
+```
+K（响应式断点）
+```
+
+移动端目前零可用性（溢出+3D消失），这个改动让有人分享链接时接收方手机上也能看。
 
 ---
 
-## 七、不做的事（防止过度工程）
-
-- ❌ 不引入 React/Vue/任何前端框架（原生 JS 够用，框架引入带来构建复杂度）
-- ❌ 不做后端数据库（SQLite/Postgres 等）— localStorage + JSON 文件对当前用量够
-- ❌ 不加 WebSocket（SSE 够用，WebSocket 需要额外管理连接状态）
-- ❌ 不做 xG 真实 Poisson 模型（冰狗的 AI 扮演保留，这是娱乐产品）
-- ❌ 不加置信区间/误差棒/统计图表（走"Bloomberg 数据可见"路线，不走"学术报告"路线）
-- ❌ 不添加 agent 数量（6个是经过测试的甜蜜点，更多 agent 会让辩论变稀释）
-
----
-
-## 八、gstack 验收清单（每轮完成后跑）
+## 七、gstack 验收清单
 
 ```bash
 B="/c/Users/zhuji/.claude/skills/gstack/browse/dist/browse"
 
-# 第一轮验收
+# === 第一轮验收 ===
 $B goto "http://localhost:3000"
-$B console --errors            # 应为零错误
-$B css "#probSegDraw" "background-color"   # 应为金色系
-$B css ".bc-speech" "font-size"            # 应为13.5px或14px
+$B console --errors
+# 期望：零 JS 错误（除 Three.js GPU stall 警告）
 
-# 第二轮验收
-$B js "document.querySelector('.ac-accuracy')?.textContent"  # 应有准确率或暂无记录
-$B js "document.querySelector('.bc-method-label')?.textContent"  # 应有方法标签
-# 启动议会后：
-$B js "document.querySelectorAll('.bc-method-label').length"  # 应 > 0
+$B css "#probSegDraw" "background-color"
+# 期望：金色系 rgb(180,140,30) 附近，而非深绿
 
-# 第三轮验收
-$B css "body" "background-color"           # 应为 rgb(1,7,20) 附近蓝色
-$B js "!!document.getElementById('tugKnot')"  # 应为 true
-# 测量对比度：
-$B js "getComputedStyle(document.getElementById('tugKnot')).fill"  # 应为金色
+$B css ".bc-speech" "font-size"
+# 期望：≥13px
 
-# 第四轮验收
+# === 第二轮验收 ===
+$B js "document.querySelector('.ac-accuracy')?.textContent"
+# 期望：有准确率或"暂无记录"文字
+
+# 召开议会后：
+$B js "document.querySelectorAll('.bc-source-layer').length"
+# 期望：> 0（每条发言都有来源标签）
+
+$B js "document.querySelector('.bc-source-layer')?.textContent"
+# 期望：包含 "Poisson模型" 或 "盘口信号" 等字样
+
+$B js "document.querySelector('.ac-stance')?.textContent"
+# 期望：发言后 agent 卡片显示立场图标+置信度
+
+# === 第三轮验收 ===
+$B css "body" "background-color"
+# 期望：rgb(1,7,20) 附近（深蓝）
+
+$B js "!!document.getElementById('tugKnot')"
+# 期望：true（拔河绳 SVG 存在）
+
+# 召开议会，等发言后：
+$B js "document.getElementById('tugKnot')?.getAttribute('cx')"
+# 期望：非 400（有位移，不再是初始中心值）
+
+# === 第四轮验收 ===
 $B viewport 375x812
 $B goto "http://localhost:3000"
-$B js "document.body.scrollWidth <= window.innerWidth"  # 应为 true（无水平溢出）
-$B screenshot /tmp/mobile-final.png
+$B js "document.body.scrollWidth <= window.innerWidth"
+# 期望：true（无水平溢出）
+$B screenshot /tmp/mobile-v4.png
 $B viewport 1280x720
 ```
 
 ---
 
-## 九、已知被跳过的 CEO 战略机会（第五轮后评估）
+## 八、不做的事
 
-这些机会价值高但改动大，留到 P1-P3 完成后再评估：
+### 不加学术性内容
+- ❌ "关于冰狗Poisson模型的原理说明"段落
+- ❌ 置信区间、误差棒、p值显示
+- ❌ 数据来源详细文档弹窗
+- ✅ 只加一行灰字标注，用户能感知到"有依据"即可
 
-1. **API 产品化**：现有9个接口结构化完整，可加 `/docs` 静态页展示，低成本让议会引擎成为可接入的数据产品
-2. **不可预测性注入**：目前议会每场节奏固定（开场→初判→对线→终投），第3场起用户会预判走势。可以引入：随机"场外消息"事件（伤病通报/换帅消息）打断节奏；agent 在 vote 阶段偶发"翻盘"发言
-3. **多场次对比**：用户看完一场后自动推荐"对比赛"（今日另一场类似积分差的比赛），增加留存
-4. **Three.js 升级路线**：`three.min.js` 换 ES Modules（`import * as THREE from 'three'`），解锁 r161+ 新特性；当前版本 r160 是最后支持 `three.min.js` 的版本
+### 不减娱乐性
+- ✅ 保留弹幕梗词（"绷不住了"/"离谱"/"寄了"）
+- ✅ 保留 catchphrase 金句机制
+- ✅ 保留 3D 场景（降为背景装饰，不是主信息区）
+
+### 不过度工程
+- ❌ 不引入 React/Vue（原生 JS 够用）
+- ❌ 不做后端数据库
+- ❌ 不加 WebSocket（SSE 够用）
+- ❌ 不真正实现 Poisson 模型（LLM 扮演是娱乐产品的合理选择）
+
+---
+
+## 九、CEO 视角：被跳过的战略机会（P4 评估后决定）
+
+1. **API 产品化**：9个接口完整，加 `/docs` 页让议会引擎变成可接入数据产品，低成本高价值
+2. **不可预测性**：第3场起节奏可预判（开场→初判→对线→终投）。引入随机"场外消息"事件可打断节奏
+3. **多场次对比**：结束后自动推荐今日积分差相似的另一场，提升留存
+4. **Three.js 升级**：r160 是最后支持 `three.min.js` 的版本，迁移 ES Modules 解锁后续版本
+
+---
+
+## 附录：v4.0→v4.3 规划演变
+
+| 版本 | 核心贡献 |
+|------|---------|
+| v4.0 (2026-04-24) | 失败案例分析；学术vs娱乐甜蜜点；布局重设计方案；可信度信号框架 |
+| v4.1 (2026-04-27) | FPL数据接入完成确认；已修复 news bug；CEO/Eng/Design 三轮审查 |
+| v4.2 (2026-04-27) | gstack 实测数据补全（CSS值/布局尺寸/错误列表）；详细代码级改动方案 |
+| **v4.3 (2026-04-27)** | **综合 v4.0 失败案例框架 + v4.2 技术实证；将"为什么"和"怎么做"统一** |
