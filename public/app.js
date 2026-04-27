@@ -903,7 +903,8 @@ function renderMatchPanel(m) {
   setHtml('oddsAway', `<div class="odds-label">${m.away} 胜</div><div class="odds-value">@${m.odds.away}</div>`);
   renderPlayers('playersHome', m.homePlayers, m.homeFlag+' '+m.home);
   renderPlayers('playersAway', m.awayPlayers, m.awayFlag+' '+m.away);
-  const newsList = m.news || m.briefing?.news || [];
+  const rawNews = m.news || m.briefing?.news || '';
+  const newsList = Array.isArray(rawNews) ? rawNews : (rawNews ? rawNews.split('；').filter(Boolean) : []);
   setHtml('newsList', newsList.map(n=>`<div class="news-item">${n}</div>`).join(''));
   // league context
   const ctxEl = document.getElementById('leagueCtx');
