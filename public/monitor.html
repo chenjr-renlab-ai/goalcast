@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>议会监控台</title>
+  <style>
+    /* 深色极简风，等宽字体 */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0a0a0f; color: #c8d0e7; font-family: 'Consolas', monospace; font-size: 12px; }
+    .monitor-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto auto;
+      gap: 1px;
+      background: #1a1a2e;
+      min-height: 100vh;
+    }
+    .panel {
+      background: #0d0d1a;
+      padding: 12px 14px;
+      overflow: hidden;
+    }
+    .panel-title {
+      font-size: 10px;
+      color: #4a9eff;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      border-bottom: 1px solid #1a1a2e;
+      padding-bottom: 6px;
+      margin-bottom: 8px;
+    }
+    /* 立场面板 */
+    .stance-grid { display: flex; flex-direction: column; gap: 6px; }
+    .stance-agent-row { display: flex; align-items: center; gap: 8px; }
+    .agent-label { width: 70px; color: rgba(255,255,255,0.5); }
+    .pick-bar { flex: 1; height: 16px; background: #1a1a2e; border-radius: 3px; position: relative; overflow: hidden; }
+    .pick-fill { height: 100%; border-radius: 3px; display: flex; align-items: center; padding-left: 6px; font-size: 10px; transition: width 0.5s; }
+    .pick-home { background: rgba(46,213,115,0.3); }
+    .pick-draw { background: rgba(255,255,255,0.15); }
+    .pick-away { background: rgba(255,71,87,0.3); }
+    .conf-val { width: 40px; text-align: right; font-size: 11px; }
+    /* 性能面板 */
+    .perf-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #1a1a2e; }
+    .perf-label { color: rgba(255,255,255,0.4); }
+    .perf-val { color: #ffd700; }
+    /* 事件流 */
+    .event-stream { height: 300px; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 2px; }
+    .event-item { padding: 2px 0; border-bottom: 1px solid #1a1a2e; }
+    .event-ts { color: rgba(255,255,255,0.2); margin-right: 8px; }
+    .event-type { color: #4a9eff; margin-right: 6px; }
+    .event-type.agent_done { color: #2ed573; }
+    .event-type.stance_change { color: #ffd700; }
+    .event-type.dispute_detected { color: #ff4757; }
+    .event-type.error { color: #ff4757; }
+    /* 共识度 */
+    .consensus-big { font-size: 48px; color: #ffd700; text-align: center; padding: 20px 0; }
+    .consensus-label-big { text-align: center; font-size: 11px; color: rgba(255,255,255,0.4); margin-top: -10px; }
+    /* 分歧面板 */
+    .dispute-item { padding: 4px 0; border-bottom: 1px solid #1a1a2e; color: rgba(255,71,87,0.8); }
+    /* 标题栏 */
+    .monitor-header {
+      grid-column: 1 / -1;
+      background: #060610;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #1a1a2e;
+    }
+    .monitor-title { color: #4a9eff; letter-spacing: 3px; font-size: 13px; }
+    .monitor-status { color: #2ed573; font-size: 11px; }
+    .monitor-status.inactive { color: rgba(255,255,255,0.3); }
+  </style>
+</head>
+<body>
+  <div class="monitor-grid">
+    <div class="monitor-header">
+      <div class="monitor-title">🔮 ORACLE COUNCIL · MONITOR</div>
+      <div class="monitor-status inactive" id="connStatus">● 未连接</div>
+    </div>
+
+    <!-- 立场快照 -->
+    <div class="panel">
+      <div class="panel-title">Agent 立场快照</div>
+      <div class="stance-grid" id="stanceGrid">
+        <div style="color:rgba(255,255,255,0.2)">等待议会开始...</div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="panel-title">活跃分歧</div>
+        <div id="disputeList" style="color:rgba(255,255,255,0.3)">暂无</div>
+      </div>
+    </div>
+
+    <!-- 共识度 + 性能 -->
+    <div class="panel">
+      <div class="panel-title">共识度</div>
+      <div class="consensus-big" id="consensusBig">—</div>
+      <div class="consensus-label-big">议会观点收敛程度</div>
+      <div style="margin-top:16px">
+        <div class="panel-title">发言耗时</div>
+        <div id="perfTable"></div>
+      </div>
+    </div>
+
+    <!-- 实时事件流 -->
+    <div class="panel" style="grid-column: 1 / -1">
+      <div class="panel-title">共享记忆流 · 实时事件</div>
+      <div class="event-stream" id="eventStream">
+        <div style="color:rgba(255,255,255,0.2)">等待数据...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const agentNames = { stat:'冰狗', mystic:'月影姐', history:'老球迷', gambler:'赌狗', psych:'碎碎念' };
+    const agentIcons = { stat:'📊', mystic:'🔮', history:'📜', gambler:'🎰', psych:'🧠' };
+    const pickColors = { home:'pick-home', draw:'pick-draw', away:'pick-away' };
+    const pickLabels = { home:'主队', draw:'平局', away:'客队' };
+    const perfData = {};
+
+    let es = null;
+
+    function connect() {
+      es = new EventSource('/api/monitor');
+      const status = document.getElementById('connStatus');
+      status.textContent = '● 已连接';
+      status.className = 'monitor-status';
+
+      es.onmessage = (e) => {
+        const d = JSON.parse(e.data);
+        if (d.type === 'monitor_state') {
+          updateStances(d.blackboard?.agentStances);
+          updateConsensus(d.blackboard?.consensusLevel);
+          updateDisputes(d.blackboard?.disputes);
+          updateEvents(d.blackboard?.monitorLog);
+          if (d.recentEvents) updatePerfTable(d.recentEvents);
+        }
+      };
+
+      es.onerror = () => {
+        status.textContent = '● 连接断开，重连中...';
+        status.className = 'monitor-status inactive';
+        setTimeout(connect, 3000);
+      };
+    }
+
+    function updateStances(stances) {
+      if (!stances) return;
+      const grid = document.getElementById('stanceGrid');
+      const entries = Object.entries(stances);
+      if (!entries.length) return;
+      grid.innerHTML = entries.map(([id, s]) => {
+        const conf = s.conf ? Math.round(s.conf * 100) : 0;
+        const cls = pickColors[s.pick] || 'pick-draw';
+        const label = pickLabels[s.pick] || s.pick || '?';
+        return `<div class="stance-agent-row">
+          <div class="agent-label">${agentIcons[id]||''} ${agentNames[id]||id}</div>
+          <div class="pick-bar">
+            <div class="pick-fill ${cls}" style="width:${conf}%">${label}</div>
+          </div>
+          <div class="conf-val">${conf}%</div>
+        </div>`;
+      }).join('');
+    }
+
+    function updateConsensus(level) {
+      if (level == null) return;
+      document.getElementById('consensusBig').textContent = Math.round(level * 100) + '%';
+    }
+
+    function updateDisputes(disputes) {
+      const el = document.getElementById('disputeList');
+      if (!disputes?.length) { el.innerHTML = '<div style="color:rgba(255,255,255,0.2)">暂无分歧</div>'; return; }
+      el.innerHTML = disputes.slice(-5).map(d =>
+        `<div class="dispute-item">⚡ ${d.topic}</div>`
+      ).join('');
+    }
+
+    function updateEvents(logs) {
+      if (!logs?.length) return;
+      const stream = document.getElementById('eventStream');
+      stream.innerHTML = logs.slice().reverse().map(e => {
+        const ts = new Date(e.ts).toLocaleTimeString('zh-CN', { hour12: false });
+        const cls = e.type || '';
+        const content = e.type === 'agent_done' ? `${agentNames[e.agentId]||e.agentId} 完成 (${e.ms}ms)` :
+                        e.type === 'agent_start' ? `${agentNames[e.agentId]||e.agentId} 开始发言...` :
+                        e.type === 'stance_change' ? `↺ ${agentNames[e.agentId]||e.agentId}: ${e.from}→${e.to}` :
+                        e.type === 'dispute_detected' ? `⚡ 分歧: ${e.topic}` :
+                        e.type === 'reaction_trigger' ? `💬 ${agentNames[e.reactor]||e.reactor} 回应 ${agentNames[e.speaker]||e.speaker}` :
+                        e.type === 'devil_assigned' ? `🎭 恶魔代言人: ${agentNames[e.agentId]||e.agentId}` :
+                        JSON.stringify(e).slice(0, 80);
+        return `<div class="event-item"><span class="event-ts">${ts}</span><span class="event-type ${cls}">[${e.type||'?'}]</span>${content}</div>`;
+      }).join('');
+    }
+
+    function updatePerfTable(events) {
+      const dones = events.filter(e => e.event?.type === 'message' || (e.event?.blackboard?.monitorLog?.find(l => l.type === 'agent_done')));
+      // simple perf tracking from events
+      const table = document.getElementById('perfTable');
+      if (!Object.keys(perfData).length && !dones.length) return;
+      // extract from monitorLog
+    }
+
+    connect();
+  </script>
+</body>
+</html>

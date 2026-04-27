@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔮 预言者议会</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── TOP BAR ── -->
+<header class="top-bar">
+  <div class="tb-brand">
+    <span class="tb-brand-main">⚽ ORACLE COUNCIL</span>
+    <span class="tb-brand-wc">FIFA · WORLD CUP 2026 · PREDICTOR</span>
+  </div>
+  <div class="tb-match">
+    <div class="tb-team home">
+      <img class="tb-crest" id="tbHomeCrest" src="" alt="" onerror="this.style.display='none'" style="display:none">
+      <span class="tb-flag" id="tbHomeFlag">🏳️</span>
+      <span class="tb-name" id="tbHomeName">主队</span>
+      <span class="tb-odds" id="tbHomeOdds"></span>
+    </div>
+    <div class="tb-center">
+      <div class="tb-vs">VS</div>
+      <div class="tb-info" id="tbDate">PREMIER LEAGUE</div>
+    </div>
+    <div class="tb-team away">
+      <span class="tb-odds" id="tbAwayOdds"></span>
+      <span class="tb-name" id="tbAwayName">客队</span>
+      <span class="tb-flag" id="tbAwayFlag">🏳️</span>
+      <img class="tb-crest" id="tbAwayCrest" src="" alt="" onerror="this.style.display='none'" style="display:none">
+    </div>
+  </div>
+  <div class="tb-right">
+    <div class="phase-bar" id="phaseBar">
+      <div class="phase-step" data-phase="opening">开场</div>
+      <div class="phase-step" data-phase="initial">初判</div>
+      <div class="phase-step" data-phase="debate">对线</div>
+      <div class="phase-step" data-phase="vote">终投</div>
+    </div>
+    <div class="live-badge" id="liveBadge"><div class="live-dot"></div>LIVE</div>
+  </div>
+</header>
+
+<!-- ── Probability Bar ── -->
+<div class="prob-bar-wrap" id="probBarWrap">
+  <div class="prob-bar-teams">
+    <span id="probHomeLabel">主队</span>
+    <span class="prob-bar-center-label">预 测 走 势</span>
+    <span id="probAwayLabel">客队</span>
+  </div>
+  <div class="prob-bar-track" id="probBarTrack">
+    <div class="prob-seg prob-home" id="probSegHome" style="width:33%">
+      <span class="prob-val" id="probValHome">—</span>
+    </div>
+    <div class="prob-seg prob-draw" id="probSegDraw" style="width:34%">
+      <span class="prob-val" id="probValDraw">—</span>
+    </div>
+    <div class="prob-seg prob-away" id="probSegAway" style="width:33%">
+      <span class="prob-val" id="probValAway">—</span>
+    </div>
+    <div class="prob-user-marker" id="probUserMarker"></div>
+  </div>
+  <div class="prob-agents-status" id="probAgentsStatus"></div>
+</div>
+
+<!-- ── Game Arena ── -->
+<div class="game-arena">
+
+  <!-- Left: stat, mystic, history -->
+  <aside class="agent-col left" id="agentColLeft"></aside>
+
+  <!-- Center: 3D Chamber + Broadcast -->
+  <div class="chamber-wrap">
+    <div class="scene3d-wrap">
+      <canvas id="threeCanvas"></canvas>
+      <div class="hud-corner tl"></div>
+      <div class="hud-corner tr"></div>
+      <div class="hud-corner bl"></div>
+      <div class="hud-corner br"></div>
+      <div class="scene3d-label">⚽ ORACLE COUNCIL · 2026 FIFA WORLD CUP PREDICTOR ◈</div>
+      <div class="speaker-hud" id="speakerHud">
+        <div class="speaker-hud-icon" id="speakerHudIcon"></div>
+        <div class="speaker-hud-name" id="speakerHudName"></div>
+      </div>
+      <!-- Feature 1: Evidence Board HUD -->
+      <div class="evidence-board" id="evidenceBoard">
+        <div class="eb-header">📋 <span>EVIDENCE BOARD</span></div>
+        <div class="eb-cols">
+          <div class="eb-col">
+            <div class="eb-col-title">✅ 已确认</div>
+            <div id="ebFacts" class="eb-items"></div>
+          </div>
+          <div class="eb-divider"></div>
+          <div class="eb-col">
+            <div class="eb-col-title">⚡ 争议中</div>
+            <div id="ebDisputes" class="eb-items"></div>
+          </div>
+        </div>
+        <div class="eb-footer">
+          <div id="ebStances" class="eb-stances"></div>
+          <div class="eb-consensus-wrap">
+            <span class="eb-consensus-label">共识</span>
+            <div class="eb-consensus-track"><div class="eb-consensus-fill" id="ebConsensusFill"></div></div>
+            <span id="ebConsensusVal">0%</span>
+          </div>
+        </div>
+      </div>
+      <!-- Feature 4: Split-Screen Battle overlay -->
+      <div class="split-screen-overlay" id="splitScreenOverlay">
+        <div class="ss-side ss-left">
+          <div class="ss-agent-card" id="ssCardLeft"></div>
+        </div>
+        <div class="ss-divider-wrap">
+          <div class="ss-divider-line"></div>
+          <div class="ss-divider-badge" id="ssDividerBadge">⚔️</div>
+          <div class="ss-divider-line"></div>
+        </div>
+        <div class="ss-side ss-right">
+          <div class="ss-agent-card" id="ssCardRight"></div>
+        </div>
+      </div>
+      <!-- 发言框：悬浮在 3D 场景底部 -->
+      <div class="broadcast-panel" id="broadcastPanel">
+        <div class="broadcast-placeholder">⚖️ 预言者议会即将开始</div>
+      </div>
+      <!-- 结果页：场景内居中覆盖层 -->
+      <div id="resultsContainer"></div>
+      <!-- 英雄卡：移入场景内，不遮挡右列 agent -->
+      <div class="hero-reveal" id="heroReveal">
+        <img class="hr-photo loading" id="hrPhoto" alt="">
+        <div class="hr-team-bg" id="hrTeamBg"></div>
+        <img class="hr-team-crest" id="hrTeamCrest" src="" alt="" onerror="this.style.display='none'" style="display:none">
+        <div class="hr-overlay" id="hrOverlay">
+          <div class="hr-top-badge" id="hrPhase"></div>
+          <div class="hr-spacer"></div>
+          <div class="hr-lower-third">
+            <div class="hr-lt-bar"></div>
+            <div class="hr-name" id="hrName"></div>
+            <div class="hr-action" id="hrAction"></div>
+            <div class="hr-agent-tag" id="hrAgentTag"></div>
+          </div>
+        </div>
+        <div class="hr-video-wrap" id="hrVideoWrap"></div>
+        <div class="hr-generating" id="hrGenerating"></div>
+      </div>
+      <!-- VS 屏幕 -->
+      <div class="vs-screen" id="vsScreen">
+        <div class="vs-a" id="vsA"></div>
+        <div class="vs-sep">⚡ VS ⚡</div>
+        <div class="vs-b" id="vsB"></div>
+      </div>
+    </div>
+
+    <div id="stanceConsensusArea" style="display:none"></div>
+  </div>
+
+  <!-- Right: gambler, psych, moderator -->
+  <aside class="agent-col right" id="agentColRight"></aside>
+
+</div>
+
+<!-- Feature 2: Signature Moment -->
+<div class="signature-moment" id="signatureMoment">
+  <div class="sm-bg" id="smBg"></div>
+  <div class="sm-content">
+    <div class="sm-type" id="smType"></div>
+    <div class="sm-icon" id="smIcon"></div>
+    <div class="sm-name" id="smName"></div>
+    <div class="sm-detail" id="smDetail"></div>
+    <div class="sm-quote" id="smQuote"></div>
+  </div>
+</div>
+
+<!-- ── Control Strip ── -->
+<div class="control-strip">
+  <div class="control-left">
+    <select class="match-selector" id="matchSel" onchange="onMatchChange(event)"></select>
+    <div class="ctrl-btn-row">
+      <button class="start-btn" id="startBtn" onclick="startCouncil()">⚡ 召开议会</button>
+      <button class="info-toggle" id="infoToggle" onclick="toggleMatchDrawer()" title="比赛详情">📋</button>
+      <a class="info-toggle" href="/monitor.html" target="_blank" title="监控面板">📊</a>
+    </div>
+    <div id="seedsStatus"></div>
+  </div>
+  <div class="history-feed" id="feed"></div>
+</div>
+
+<!-- Feature 5: Live Ticker — 固定在页面最底部 -->
+<div class="live-ticker" id="liveTicker">
+  <div class="ticker-label">● LIVE</div>
+  <div class="ticker-track">
+    <div class="ticker-content" id="tickerContent">加载中...</div>
+  </div>
+</div>
+
+<!-- ── Match Drawer ── -->
+<div class="match-drawer" id="matchDrawer">
+  <button class="drawer-close" onclick="toggleMatchDrawer()">✕</button>
+  <div class="match-teams">
+    <div class="team-side">
+      <div class="team-flag" id="teamHomeFlagDrawer"></div>
+      <div class="team-name" id="teamHomeNameDrawer"></div>
+    </div>
+    <div class="match-center">
+      <div class="vs-label">VS</div>
+      <div class="match-stage" id="matchStage"></div>
+    </div>
+    <div class="team-side">
+      <div class="team-flag" id="teamAwayFlagDrawer"></div>
+      <div class="team-name" id="teamAwayNameDrawer"></div>
+    </div>
+  </div>
+  <div class="odds-row">
+    <div class="odds-box home" id="oddsHome"></div>
+    <div class="odds-box draw" id="oddsDraw"></div>
+    <div class="odds-box away" id="oddsAway"></div>
+  </div>
+  <div class="players-section" id="playersHome">
+    <div class="players-title"></div>
+    <div class="players-grid"></div>
+  </div>
+  <div class="players-section" id="playersAway">
+    <div class="players-title"></div>
+    <div class="players-grid"></div>
+  </div>
+  <div class="news-section">
+    <div class="news-title">📰 赛前快讯</div>
+    <div class="news-list" id="newsList"></div>
+  </div>
+</div>
+
+<!-- ── 比分选择器弹窗 ── -->
+<div class="score-modal-backdrop" id="scoreModalBackdrop">
+  <div class="score-modal" id="scoreModal">
+    <div class="sm-header">
+      <div class="sm-title">⚽ 你的比分预言</div>
+      <div class="sm-subtitle">议会开始前，先亮出你的判断</div>
+    </div>
+    <div class="sm-teams">
+      <div class="sm-team">
+        <div class="sm-team-name" id="smHomeName">主队</div>
+        <div class="sm-score-ctrl">
+          <button class="sm-btn minus" onclick="adjustScore('home',-1)">−</button>
+          <div class="sm-score-display" id="smHomeScore">0</div>
+          <button class="sm-btn plus" onclick="adjustScore('home',1)">+</button>
+        </div>
+      </div>
+      <div class="sm-vs-sep">–</div>
+      <div class="sm-team">
+        <div class="sm-team-name" id="smAwayName">客队</div>
+        <div class="sm-score-ctrl">
+          <button class="sm-btn minus" onclick="adjustScore('away',-1)">−</button>
+          <div class="sm-score-display" id="smAwayScore">0</div>
+          <button class="sm-btn plus" onclick="adjustScore('away',1)">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="sm-quick-row" id="smQuickRow">
+      <!-- 热门比分快选，由 JS 填充 -->
+    </div>
+    <div class="sm-agent-hint" id="smAgentHint"></div>
+    <div class="sm-actions">
+      <button class="sm-confirm-btn" id="smConfirmBtn" onclick="confirmScore()">确认比分预言</button>
+      <button class="sm-skip-btn" onclick="skipScore()">跳过</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 赛后结果录入浮层 ── -->
+<div class="result-input-panel" id="resultInputPanel" style="display:none">
+  <div class="rip-label">📊 录入实际比分验证预言</div>
+  <div class="rip-ctrl">
+    <input class="rip-input" id="ripHome" type="number" min="0" max="20" value="0" style="width:40px;text-align:center">
+    <span class="rip-sep">–</span>
+    <input class="rip-input" id="ripAway" type="number" min="0" max="20" value="0" style="width:40px;text-align:center">
+    <button class="rip-submit" onclick="submitActualResult()">确认</button>
+    <button class="rip-close" onclick="document.getElementById('resultInputPanel').style.display='none'">✕</button>
+  </div>
+</div>
+
+<div id="resultsContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script>
+<script src="scene3d.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

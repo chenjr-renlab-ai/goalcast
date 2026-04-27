@@ -1,0 +1,26 @@
+# 环境变量（含 API Keys，绝对不提交）
+.env
+.env.*
+
+# 依赖
+node_modules/
+
+# 运行时缓存
+.cache/
+.memory/
+
+# 调试截图
+screenshots/
+
+# 本地工具数据
+.gstack/
+.teamagent/
+.claude/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+npm-debug.log*

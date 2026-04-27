@@ -1,0 +1,77 @@
+分类,字段/事件,HTTP方法及端点,数据状态,格式/示例值,前置条件,对外接口说明
+=== API端点 ===,,,,,,
+赛程列表,（整个响应体）,GET /api/matches,✅ 真实,JSON数组（21条）,无（服务器启动自动加载）,"可直接消费：英超未来14天赛程，含队名/队徽/赔率/轮次/时间"
+单场数据,（整个响应体）,GET /api/match/:id,✅/⚠️ 混合,JSON对象（完整match结构）,需先调用 prepare，"可直接消费：prepare后包含全量数据，含球员/xG/伤情/历史注等"
+触发数据补全,status/seedsReady,POST /api/match/:id/prepare,操作型,{"status":"ok"or"pending"},无,"调用后等待约3-8秒，并行拉取FPL/历史/H2H/Odds数据并LLM生成seeds"
+就绪检查,ready: boolean,GET /api/match/:id/ready,✅ 实时,{"ready":true/false},无,"轮询用：检查 prepare 是否完成（seeds已生成=true）"
+AI议会事件流,SSE事件流（多类型）,GET /api/run?matchId=xxx,⚠️ AI生成,text/event-stream（SSE），见下方事件类型,需 prepare 完成,"核心输出：完整AI辩论过程，可接入任意前端/后端实时消费"
+监控状态流,blackboard+recentEvents,GET /api/monitor,✅/⚠️ 混合,text/event-stream 每2秒推送,无（独立运行）,"监控用：可用于仪表盘或外部监控系统消费实时辩论状态"
+录入比赛结果,hitLevels（各agent准确率）,POST /api/result,✅ 真实,{"actualScore":[2,1]}，返回各agent命中情况,需议会跑完，"用于赛后验证：触发准确率更新，可作为评估各agent预测质量的数据接口"
+Agent历史准确率,各agent.total/correct/accuracy/byType,GET /api/memory/profiles,✅ 真实（累积）,"{'stat':{total:N,correct:M,...}}","历史数据持久化于 .memory/long-term.json","可消费：各AI角色历史胜率统计，可用于加权推荐或展示可信度"
+视频生成（可选）,video URL,POST /api/generate-video,依赖HuggingFace,{playerName+actionDesc}→视频URL,需 HUGGINGFACE_TOKEN 环境变量,"通过HuggingFace Inference API生成球员动作视频片段（实验性功能）"
+,,,,,,
+=== 单场数据字段（GET /api/match/:id，prepare后完整） ===,,,,,,
+=== 基础赛事信息 ===,,,,,,
+主队名（中文）,home,GET /api/match/:id,✅ 真实,字符串 "曼联",服务器启动,"可直接用作队名显示，中文已映射"
+客队名（中文）,away,GET /api/match/:id,✅ 真实,字符串 "布伦特福德",服务器启动,
+主队队旗emoji,homeFlag,GET /api/match/:id,✅ 真实,字符串 "🔴",服务器启动,
+客队队旗emoji,awayFlag,GET /api/match/:id,✅ 真实,字符串 "🔴",服务器启动,
+主队队徽URL,homeCrest,GET /api/match/:id,✅ 真实,URL字符串（football-data.org CDN）,服务器启动,
+客队队徽URL,awayCrest,GET /api/match/:id,✅ 真实,URL字符串（football-data.org CDN）,服务器启动,
+轮次,stage,GET /api/match/:id,✅ 真实,字符串 "第34轮",服务器启动,
+场地,venue,GET /api/match/:id,✅ 真实,字符串 "Emirates Stadium",服务器启动,
+比赛UTC时间,utcDate,GET /api/match/:id,✅ 真实,ISO8601字符串,服务器启动,
+比赛意义分级,leagueContext.stakes,GET /api/match/:id,✅ 真实（推导）,"枚举：title/top4/relegation/mixed/mid",服务器启动,"可用于内容优先级排序"
+主队排名,leagueContext.homeRank,GET /api/match/:id,✅ 真实,数字 3,服务器启动,
+客队排名,leagueContext.awayRank,GET /api/match/:id,✅ 真实,数字 9,服务器启动,
+主队积分,leagueContext.homePoints,GET /api/match/:id,✅ 真实,数字 58,服务器启动,
+客队积分,leagueContext.awayPoints,GET /api/match/:id,✅ 真实,数字 48,服务器启动,
+英超总轮次,leagueContext.totalMatchdays,GET /api/match/:id,✅ 真实,数字 38,服务器启动,
+,,,,,,
+=== 赔率数据 ===,,,,,,
+主队欧赔,odds.home,GET /api/match/:id,✅ 真实（bet365）,数字 2.5,服务器启动,
+平局欧赔,odds.draw,GET /api/match/:id,✅ 真实（bet365）,数字 3.2,服务器启动,
+客队欧赔,odds.away,GET /api/match/:id,✅ 真实（bet365）,数字 2.8,服务器启动,
+水钱与隐含概率,briefing.ev,GET /api/match/:id,✅ 真实（计算）,"字符串 '庄家水钱7.0%；主胜37.4%、平局29.2%、客胜33.4%'",prepare后,"可直接用于显示赔率效率分析"
+赔率隐含比分倾向,briefing.impliedScore,GET /api/match/:id,✅ 真实（计算）,"字符串 '小幅看主队→1-0或2-1，进球中等(2-3球)'",prepare后,
+赔率文字描述,briefing.oddsMove,GET /api/match/:id,✅ 真实（格式化），"字符串 '主队赔率2.5，平局赔率3.2，客队赔率2.8'",prepare后,"注：目前无历史赔率对比，仅当前值"
+,,,,,,
+=== 近期战绩（football-data.org v4） ===,,,,,,
+主队近5场战绩,briefing.homeForm,GET /api/match/:id,✅ 真实,"字符串 '近5场：2胜1平2负，进球1.6/场'",prepare后,
+客队近5场战绩,briefing.awayForm,GET /api/match/:id,✅ 真实,"字符串 '近5场：0胜5平0负，进球0.8/场'",prepare后,
+主队场均进失球,briefing.avgHomeGoals,GET /api/match/:id,✅ 真实,"字符串 '曼联场均进1.6球/失0.8球'",prepare后,
+客队场均进失球,briefing.avgAwayGoals,GET /api/match/:id,✅ 真实,"字符串 '布伦特福德场均进0.8球/失1.2球'",prepare后,
+主队心理面判断,briefing.homeForm_mood,GET /api/match/:id,✅ 真实（推导）,"字符串 '曼联近3场2胜以上，士气高涨'",prepare后,"基于真实近3场胜负推导，非AI臆想"
+客队心理面判断,briefing.awayForm_mood,GET /api/match/:id,✅ 真实（推导）,"字符串 '布伦特福德近3场无胜，客场压力叠加'",prepare后,
+,,,,,,
+=== H2H历史数据（football-data.org v4） ===,,,,,,
+历史交锋汇总,briefing.h2h,GET /api/match/:id,✅ 真实,"字符串 '近9次交锋：主队5胜1平3负'",prepare后,
+历史最常见比分,briefing.h2hScoreFreq,GET /api/match/:id,✅ 真实,"字符串 '近9次最常见：1-0(3次)、0-1(2次)'",prepare后,
+历史详细注解,briefing.historicalNote,GET /api/match/:id,✅ 真实（派生）,"字符串 '近9次对阵场均3.4球（78%为大球局）；最近一次2022-01-19：1-3；曼联主场胜率100%（4/4场）'",prepare后,"从H2H原始数据多维提炼：进球密度/大球率/主场胜率/最近一次比分"
+积分榜对比,briefing.standings,GET /api/match/:id,✅ 真实,"字符串 '曼联排第3（58分），布伦特福德排第9（48分），积分差10分'",prepare后,
+,,,,,,
+=== xG预期进球（FPL API） ===,,,,,,
+双方xG概览,briefing.xg_note,GET /api/match/:id,✅ 真实（FPL）,"字符串 '曼联：xG/场约1.75（Šeško 0.45、Zirkzee 0.38、B.Fernandes 0.36） | 布伦特福德：xG/场约1.67（Thiago 0.61）'",prepare后,"来自FPL expected_goals_per_90真实赛季数据"
+,,,,,,
+=== 球员数据（FPL API） ===,,,,,,
+主队关键球员列表,homePlayers[],GET /api/match/:id,✅ 真实（FPL）,"数组：[{name:'Šeško',pos:'FWD',stat:'9球2助 xG/90:0.45',status:'available',news:''}]",prepare后,"8名关键球员：1GK+2DEF+3MID+2FWD，含上场时间/进球/助攻/xG/状态"
+客队关键球员列表,awayPlayers[],GET /api/match/:id,✅ 真实（FPL）,同上格式,prepare后,
+球员伤病新闻,briefing.news,GET /api/match/:id,✅ 真实（FPL）,"字符串 '【曼联】Mbeumo（存疑）：Knock - 75% chance of playing'",prepare后,"FPL官方伤病/停赛消息，英文原文"
+战术阵型简判,briefing.tactical,GET /api/match/:id,⚠️ 派生（弱）,"字符串 '曼联双前锋进攻型 vs 布伦特福德单前锋控制型'",prepare后,"基于FPL球员位置数量推断，粗略"
+,,,,,,
+=== AI生成内容 ===,,,,,,
+各Agent叙事种子,agentSeeds.{stat|mystic|history|gambler|psych},GET /api/match/:id,⚠️ AI生成,"对象：5个key各50-80字中文叙事",prepare后,"LLM基于真实数据预生成，可作为文本摘要内容消费"
+日期玄学注解,briefing.numerology,GET /api/match/:id,⚠️ 虚构（算术）,"字符串 '4/27日数字和31→精简4，数字不利变数大；上弦蓄势，客队能量涌动'",prepare后,"纯娱乐性，月影姐专用，无真实占星依据"
+,,,,,,
+=== SSE事件流（GET /api/run?matchId=xxx） ===,,,,,,
+阶段切换,{type:'phase' phase:string},SSE /api/run,事件驱动,"phase枚举：opening/initial/reaction/debate/vote/summary",议会运行中,
+Agent思考中,"{type:'thinking' agentId:string}",SSE /api/run,事件驱动,agentId枚举：stat/mystic/history/gambler/psych/moderator,议会运行中,
+Agent完整发言,"{type:'message' agentId speech catchphrase emotion structured}",SSE /api/run,⚠️ AI生成,"structured字段含：winner(home/draw/away) score([N,M]) confidence(0-1) keyFactor(字符串)",议会运行中,"最核心输出：可接入任意实时显示系统"
+黑板状态更新,"{type:'blackboard_update' blackboard:{agentStances consensusLevel pivotMoments}}",SSE /api/run,实时计算,agentStances含各agent当前pick+conf+history,议会运行中,"可消费：实时共识度/各agent立场/转向历史"
+立场转向事件,"{type:'pivot' agentId round from to}",SSE /api/run,事件驱动,"from/to枚举：home/draw/away",议会运行中,
+辩论结束原因,"{type:'debate_stop' reason msg}",SSE /api/run,事件驱动,"reason枚举：consensus/stalemate/maxrounds",议会运行中,
+最终预测汇总,"{type:'summary' results:{home draw away councilScore agentPredictions}}",SSE /api/run,⚠️ AI生成+计算,"home/draw/away为0-1概率；councilScore为[N,M]",议会结束,"最终输出：经W-5概率重平衡器修正后的三方概率+议会建议比分"
+,,,,,,
+=== 准确率与记忆（GET /api/memory/profiles） ===,,,,,,
+各Agent准确率,{agentId: {total correct byType}},GET /api/memory/profiles,✅ 真实（累积）,"{'stat':{total:12,correct:7,byType:{home:{...}}}}",需历史录入数据,"可消费：各AI角色历史胜率，持久化于.memory/long-term.json"
+历史对局记录,episodes[],GET /api/memory/profiles（含在profiles响应里）,✅ 真实（累积）,"含matchId/date/actualScore/agentStances/hitLevels",需历史录入数据,"最多保留50场记录"
