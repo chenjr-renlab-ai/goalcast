@@ -169,6 +169,7 @@ async function enrichMatchBriefing(match) {
       ev,
       historicalNote,
       tactical,
+      _fplAvailable: !!(homeFPL || awayFPL), // V44-2: 前端据此显示降级提示
       standings: (() => {
         const lc = match.leagueContext || {};
         if (!lc.homeRank || !lc.awayRank) return '积分数据暂无';

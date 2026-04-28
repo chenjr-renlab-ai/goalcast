@@ -909,31 +909,31 @@ window.Scene3D = (() => {
         emissiveIntensity: emInt
       });
 
-    // 躯干
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.27, 0.75, 8), mat(shirtColor, 0.72));
-    torso.position.y = 1.25; g.add(torso);
+    // 躯干（U7-A: 增高拉细，改善比例）
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 1.0, 10), mat(shirtColor, 0.72));
+    torso.position.y = 1.5; torso.userData.isTorso = true; g.add(torso);
 
     // 脖子
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.18, 8), mat(skinCol));
-    neck.position.y = 1.66; g.add(neck);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.10, 0.18, 8), mat(skinCol));
+    neck.position.y = 2.09; g.add(neck);
 
-    // 头部
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.30, 16, 12), mat(skinCol, 0.88));
-    head.position.y = 1.88; g.add(head);
+    // 头部（U7-A: 缩小头部半径 0.30→0.24）
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 20, 16), mat(skinCol, 0.88));
+    head.position.y = 2.25; g.add(head);
     head.userData.isHead = true;
 
     // 发型（半球）
     const hairMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.295, 16, 8, 0, Math.PI*2, 0, Math.PI * 0.55),
+      new THREE.SphereGeometry(0.238, 16, 8, 0, Math.PI*2, 0, Math.PI * 0.55),
       mat(hairColor, 1.0)
     );
-    hairMesh.position.y = 1.85; g.add(hairMesh);
+    hairMesh.position.y = 2.22; g.add(hairMesh);
 
     // 月影姐长发
     if (id === 'mystic') {
       [-1,1].forEach(dir => {
-        const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.03, 0.6, 6), mat(hairColor,1));
-        strand.position.set(dir * 0.26, 1.7, 0);
+        const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.025, 0.6, 6), mat(hairColor,1));
+        strand.position.set(dir * 0.22, 2.07, 0);
         strand.rotation.z = dir * 0.25;
         g.add(strand);
       });
@@ -941,8 +941,8 @@ window.Scene3D = (() => {
     // 议长炸毛
     if (id === 'moderator') {
       [-2,-1,0,1,2].forEach(i => {
-        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.18, 5), mat(hairColor, 1));
-        spike.position.set(i * 0.09, 2.18, 0);
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.16, 5), mat(hairColor, 1));
+        spike.position.set(i * 0.08, 2.52, 0);
         spike.rotation.z = i * 0.18;
         g.add(spike);
       });
@@ -950,73 +950,100 @@ window.Scene3D = (() => {
 
     // 眼睛
     [-0.1, 0.1].forEach(ex => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), mat(0x1a1a2a));
-      eye.position.set(ex, 1.86, 0.24);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), mat(0x1a1a2a));
+      eye.position.set(ex, 2.22, 0.19);
       g.add(eye);
       // 高光
-      const hi = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), mat(0xffffff));
-      hi.position.set(ex + 0.012, 1.875, 0.265);
+      const hi = new THREE.Mesh(new THREE.SphereGeometry(0.010, 6, 6), mat(0xffffff));
+      hi.position.set(ex + 0.010, 2.235, 0.205);
       g.add(hi);
     });
 
-    // 嘴巴（小半圆）
-    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.012, 5, 12, Math.PI), mat(0x8a4a3a));
-    mouth.position.set(0, 1.78, 0.26); mouth.rotation.x = -Math.PI * 0.15;
+    // 嘴巴（小半圆，U7-C: 存入 nodes 用于动画）
+    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.048, 0.010, 5, 12, Math.PI), mat(0x8a4a3a));
+    mouth.position.set(0, 2.13, 0.20); mouth.rotation.x = -Math.PI * 0.15;
     g.add(mouth);
 
     // 冰狗眼镜
     if (id === 'stat') {
       [-0.1, 0.1].forEach(ex => {
-        const frame = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.012, 6, 12), mat(color, 0.5, 0.5));
-        frame.position.set(ex, 1.86, 0.245);
+        const frame = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.010, 6, 12), mat(color, 0.5, 0.5));
+        frame.position.set(ex, 2.22, 0.185);
         frame.rotation.x = Math.PI * 0.5;
         g.add(frame);
       });
     }
     // 碎碎念耳机
     if (id === 'psych') {
-      const band = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.022, 6, 20, Math.PI), mat(color, 0.5, 0.5));
-      band.position.set(0, 1.95, 0); band.rotation.z = Math.PI;
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.020, 6, 20, Math.PI), mat(color, 0.5, 0.5));
+      band.position.set(0, 2.30, 0); band.rotation.z = Math.PI;
       g.add(band);
       [-1,1].forEach(dir => {
-        const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 8), mat(color, 0.4, 0.6));
-        cup.position.set(dir * 0.32, 1.85, 0); cup.rotation.z = Math.PI/2;
+        const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.058, 0.05, 8), mat(color, 0.4, 0.6));
+        cup.position.set(dir * 0.26, 2.22, 0); cup.rotation.z = Math.PI/2;
         g.add(cup);
       });
     }
     // 议长麦克风
     if (id === 'moderator') {
       const micGrip = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.35, 6), mat(0xaaaaaa, 0.4, 0.8));
-      micGrip.position.set(0.32, 0.88, 0.1); micGrip.rotation.z = 0.4;
+      micGrip.position.set(0.32, 1.13, 0.1); micGrip.rotation.z = 0.4;
       g.add(micGrip);
       const micHead = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), mat(0x888888, 0.3, 0.9));
-      micHead.position.set(0.40, 1.06, 0.18);
+      micHead.position.set(0.40, 1.31, 0.18);
       g.add(micHead);
     }
     // 赌狗扑克牌
     if (id === 'gambler') {
       [-0.05, 0, 0.05].forEach((off, i) => {
         const card3d = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.01, 0.14), mat(i===1?0xff4444:0xffffff, 0.6));
-        card3d.position.set(0.38+off*0.5, 0.88, 0.08+off*0.3);
+        card3d.position.set(0.38+off*0.5, 1.13, 0.08+off*0.3);
         card3d.rotation.y = i * 0.2;
         g.add(card3d);
       });
     }
+    // U7-B: 月影姐月亮发饰
+    if (id === 'mystic') {
+      const moon = new THREE.Mesh(
+        new THREE.TorusGeometry(0.07, 0.018, 5, 12, Math.PI * 1.4),
+        mat(0xf0d060, 0.3, 0.85, 0xf0d060, 0.9)
+      );
+      moon.position.set(0.08, 2.50, 0.05);
+      moon.rotation.set(0.3, 0, Math.PI * 0.15);
+      g.add(moon);
+    }
+    // U7-B: 老球迷围巾
+    if (id === 'history') {
+      const scarf = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.13, 0.13, 0.20, 10),
+        mat(COLORS[id], 0.9, 0, null, 0.45)
+      );
+      scarf.position.y = 2.04;
+      g.add(scarf);
+      // 围巾垂下来的一段
+      const tail = new THREE.Mesh(
+        new THREE.BoxGeometry(0.06, 0.38, 0.04),
+        mat(COLORS[id], 0.9, 0, null, 0.30)
+      );
+      tail.position.set(0.04, 1.78, 0.10);
+      tail.rotation.z = 0.12;
+      g.add(tail);
+    }
 
-    // 手臂
+    // 手臂（U7-A: 随躯干上移 +0.25）
     [-1,1].forEach(dir => {
-      const armUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.07, 0.44, 6), mat(shirtColor, 0.85));
-      armUpper.position.set(dir * 0.34, 1.15, 0);
+      const armUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.060, 0.44, 6), mat(shirtColor, 0.85));
+      armUpper.position.set(dir * 0.32, 1.40, 0);
       armUpper.rotation.z = dir * 0.32;
       g.add(armUpper);
 
-      const armLower = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.06, 0.4, 6), mat(shirtColor, 0.85));
-      armLower.position.set(dir * 0.38, 0.88, 0);
+      const armLower = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.050, 0.40, 6), mat(shirtColor, 0.85));
+      armLower.position.set(dir * 0.36, 1.13, 0);
       armLower.rotation.z = dir * 0.22;
       g.add(armLower);
 
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 8), mat(skinCol));
-      hand.position.set(dir * 0.40, 0.70, 0);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 8), mat(skinCol));
+      hand.position.set(dir * 0.38, 0.95, 0);
       g.add(hand);
     });
 
@@ -1037,14 +1064,14 @@ window.Scene3D = (() => {
 
     // 用 Sprite 仅作为发光标注（放在头顶）
     const sprite = makeNameBadge(id, color);
-    sprite.position.y = 2.52; sprite.scale.set(2.2, 0.56, 1);
+    sprite.position.y = 2.80; sprite.scale.set(2.2, 0.56, 1);
     g.add(sprite);
 
     // Point light（从胸部位置）
     const light = new THREE.PointLight(color, .5, 10);
     light.position.y = 1.5; g.add(light);
 
-    nodes[id] = { g, hex, beam, orbRing, orbRing2, sprite, light, pillar, edgeRing, angle, x, z };
+    nodes[id] = { g, hex, beam, orbRing, orbRing2, sprite, light, pillar, edgeRing, angle, x, z, mouth };
   }
 
   // ── 各 agent 专属广播主播台 ──────────────────────────────────
@@ -1665,15 +1692,19 @@ window.Scene3D = (() => {
     // 3D 角色呼吸/发言动画
     Object.entries(nodes).forEach(([id, n]) => {
       const isSpeak = id === currentSpeakerId;
-      // 轻微上下浮动（所有角色）
-      const bobY = Math.sin(t * 1.2 + n.angle * 2) * 0.02;
-      // 发言时微微前倾
+      // U7-D: 非发言时轻微浮动（idle breathing），发言时停止以突出静止姿态
+      const bobY = isSpeak ? 0 : Math.sin(t * 0.8 + n.angle) * 0.02;
+      // 发言时躯干微微前倾
       n.g.children.forEach(child => {
         if (child.userData?.isTorso) {
           child.rotation.x = isSpeak ? Math.sin(t * 3) * 0.04 : 0;
         }
       });
       if (n.g) n.g.position.y = bobY;
+      // U7-C: 嘴部动画——发言时张合，其余时间复位
+      if (n.mouth) {
+        n.mouth.scale.y = isSpeak ? 1 + Math.abs(Math.sin(t * 7)) * 1.2 : 1;
+      }
     });
 
     // Orbit rings

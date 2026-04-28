@@ -1025,7 +1025,11 @@ function renderMatchPanel(m) {
   renderPlayers('playersAway', m.awayPlayers, m.awayFlag+' '+m.away);
   const rawNews = m.news || m.briefing?.news || '';
   const newsList = Array.isArray(rawNews) ? rawNews : (rawNews ? rawNews.split('；').filter(Boolean) : []);
-  setHtml('newsList', newsList.map(n=>`<div class="news-item">${n}</div>`).join(''));
+  // V44-2: FPL 不可用时显示降级提示
+  const fplNote = m.briefing?._fplAvailable === false
+    ? `<div class="fpl-unavailable">⚠️ FPL 数据暂时不可用，球员/xG/伤情字段将显示"暂无"</div>`
+    : '';
+  setHtml('newsList', fplNote + newsList.map(n=>`<div class="news-item">${n}</div>`).join(''));
   // league context
   const ctxEl = document.getElementById('leagueCtx');
   if (m.leagueContext) {
