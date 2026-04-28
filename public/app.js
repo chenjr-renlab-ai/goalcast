@@ -378,7 +378,7 @@ async function init() {
   });
 
   // U1: Onboarding — 版本号机制，大改动时递增版本使其再次弹出
-  const ONBOARDING_VER = 'oracle_visited_v2';
+  const ONBOARDING_VER = 'oracle_visited_v3';
   if (!localStorage.getItem(ONBOARDING_VER)) {
     const ol = document.getElementById('onboardingOverlay');
     if (ol) ol.style.display = 'flex';
@@ -640,14 +640,15 @@ function renderProbBar() {
   }
 
   // 数值标签
-  const vh = document.getElementById('probValHome'); if (vh) vh.textContent = fmt(home);
-  const vd = document.getElementById('probValDraw'); if (vd) vd.textContent = fmt(draw);
-  const va = document.getElementById('probValAway'); if (va) va.textContent = fmt(away);
-
-  // 兼容旧版 prob-seg（如果存在）
-  const clamp = v => Math.min(100, Math.max(0, v));
-  const setBar = (segId, pct) => { const s = document.getElementById(segId); if (s) s.style.width = `${clamp(pct).toFixed(1)}%`; };
-  setBar('probSegHome', home); setBar('probSegDraw', draw); setBar('probSegAway', away);
+  const vh = document.getElementById('probValHome'); if (vh) { vh.textContent = fmt(home); flashVal(vh); }
+  const vd = document.getElementById('probValDraw'); if (vd) { vd.textContent = fmt(draw); flashVal(vd); }
+  const va = document.getElementById('probValAway'); if (va) { va.textContent = fmt(away); flashVal(va); }
+}
+function flashVal(el) {
+  if (!el) return;
+  el.classList.remove('tug-flash');
+  void el.offsetWidth;
+  el.classList.add('tug-flash');
 }
 
 function updateProbFromMsg(data) {
