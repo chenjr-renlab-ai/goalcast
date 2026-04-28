@@ -433,10 +433,16 @@ function makeAgentCard(id) {
 function updateAgentStanceDisplay(agentId, pick, conf) {
   const el = document.getElementById(`stance-${agentId}`);
   if (!el) return;
-  const icons = { home: '🏠', draw: '⚖️', away: '✈️' };
+  const m = currentMatchData;
+  // 用球队名+中文标签，不用图标（图标让用户看不懂）
+  const labels = {
+    home: `${m?.home||'主队'}胜`,
+    draw: '平局',
+    away: `${m?.away||'客队'}胜`,
+  };
   const pct = Math.round((conf || 0.5) * 100);
   el.innerHTML = pick
-    ? `<span class="stance-icon">${icons[pick] || '?'}</span><span class="stance-conf">${pct}%</span>`
+    ? `<span class="stance-pick">${labels[pick] || pick}</span><span class="stance-conf">${pct}%</span>`
     : '';
   el.className = `ac-stance stance-${pick || 'none'}`;
 }
@@ -1313,10 +1319,18 @@ function triggerSignatureMoment(type, agentId, detail, quote) {
 }
 
 function handleDevilReveal(d) {
+  const m = currentMatchData;
+  const pickLabels = {
+    home: `${m?.home||'主队'}胜`,
+    draw: '平局',
+    away: `${m?.away||'客队'}胜`,
+  };
   const agentName = (AGENTS[d.agentId]?.name) || d.agentId || '?';
   const playedStance = d.playedStance;
   const trueStance   = d.trueStance;
   const changed = playedStance?.pick !== trueStance?.pick;
+  const playedLabel = pickLabels[playedStance?.pick] || playedStance?.pick || '未知';
+  const trueLabel   = pickLabels[trueStance?.pick]   || trueStance?.pick   || '未知';
   const bp = document.getElementById('broadcastPanel');
   let container = bp?.querySelector('.broadcast-content');
   if (!container && bp) {
@@ -1328,17 +1342,15 @@ function handleDevilReveal(d) {
   const card = document.createElement('div');
   card.className = 'devil-reveal-card';
   card.innerHTML = `
-    <div class="dr-title">🎭 恶魔代言人揭晓</div>
+    <div class="dr-title">🎭 ${escapeHtml(agentName)} · 恶魔代言人揭晓</div>
     <div class="dr-body">
-      ${escapeHtml(agentName)} 本场是恶魔代言人——<br>
-      辩论中扮演的立场：${escapeHtml(playedStance?.pick ?? '未知')}<br>
-      真实投票立场：${escapeHtml(trueStance?.pick ?? '未知')}<br>
-      ${changed ? '⚡ 立场在投票时发生了转变' : '✓ 坚守了真实判断'}
+      <div class="dr-row"><span class="dr-label">辩论中扮演的立场</span><span class="dr-val">${escapeHtml(playedLabel)}</span></div>
+      <div class="dr-row"><span class="dr-label">终投的真实立场</span><span class="dr-val dr-true">${escapeHtml(trueLabel)}</span></div>
+      <div class="dr-result">${changed ? '⚡ 终投时立场已变' : '✓ 始终坚持真实判断，没有被对线改变'}</div>
     </div>`;
   if (container) { container.appendChild(card); card.scrollIntoView({ behavior:'smooth', block:'nearest' }); }
-  // Signature Moment: devil reveal (reuse `changed` declared above)
   triggerSignatureMoment('devil_reveal', d.agentId,
-    changed ? `扮演→真实：立场已变` : `坚守了真实判断`,
+    changed ? `${agentName}：扮演${playedLabel} → 真实${trueLabel}` : `${agentName}：始终坚持${trueLabel}`,
     AGENTS[d.agentId]?.name + ' 是本场恶魔代言人');
 }
 
@@ -1448,16 +1460,17 @@ function handleMessage(data) {
     updateAgentStanceDisplay(data.agentId, data.structured.winner, normConf);
   }
 
-  // U5: 终投阶段显示实时投票计数
+  // U5: 终投阶段显示实时投票计数（用球队名，不用图标）
   if (data.phase === 'vote' && data.structured?.winner) {
     const tally = document.getElementById('voteTally');
     if (tally) {
       tally.style.display = 'flex';
+      const m = currentMatchData;
       const votes = { home:0, draw:0, away:0 };
       Object.values(agentsVoted).forEach(v => { if (v) votes[v] = (votes[v]||0) + 1; });
-      document.getElementById('vtHome').textContent = `🏠 ${votes.home}票`;
-      document.getElementById('vtDraw').textContent = `⚖️ ${votes.draw}票`;
-      document.getElementById('vtAway').textContent = `✈️ ${votes.away}票`;
+      document.getElementById('vtHome').textContent = `${m?.home||'主队'}胜 ${votes.home}票`;
+      document.getElementById('vtDraw').textContent = `平局 ${votes.draw}票`;
+      document.getElementById('vtAway').textContent = `${m?.away||'客队'}胜 ${votes.away}票`;
     }
   }
 }
@@ -1492,12 +1505,9 @@ function updateBroadcast(data, agent) {
   const isMod = data.agentId === 'moderator';
   const badgeCls = { opening:'badge-opening', initial:'badge-initial', debate:'badge-debate', vote:'badge-vote', reaction:'' }[data.phase] || '';
 
-  // 把上一张活跃卡片降为压缩态
-  container.querySelectorAll('.bc-card.bc-active').forEach(c => c.classList.remove('bc-active'));
-
-  // 保留最多3条，超出删最旧
-  const existing = container.querySelectorAll('.bc-card');
-  if (existing.length >= 3) existing[0].remove();
+  // 每次新发言时清空旧卡片，只保留当前一张
+  // 旧卡片已在历史记录里，发言框只做"当前发言人"焦点
+  container.querySelectorAll('.bc-card').forEach(c => c.remove());
 
   const shortSpeech = (data.speech || '').slice(0, 72) + ((data.speech || '').length > 72 ? '…' : '');
 

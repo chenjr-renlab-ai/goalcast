@@ -1644,9 +1644,9 @@ body.session-active .prob-bar-wrap {
 .ac-empty { color:var(--text-dim); font-style:italic; font-size:9px; }
 
 /* A: 立场指示器 */
-.ac-stance { font-size:11px; text-align:center; min-height:22px; padding:2px 0; transition:all .3s; border-radius:3px; }
-.ac-stance .stance-icon { font-size:13px; }
-.ac-stance .stance-conf { color:var(--text-sub); font-size:10px; margin-left:2px; }
+.ac-stance { font-size:10px; text-align:center; min-height:22px; padding:2px 4px; transition:all .3s; border-radius:3px; display:flex; align-items:center; justify-content:center; gap:3px; }
+.ac-stance .stance-pick { font-weight:800; font-size:10px; }
+.ac-stance .stance-conf { color:var(--text-sub); font-size:10px; }
 .stance-home { background:rgba(30,80,200,.12); }
 .stance-draw { background:rgba(180,140,30,.12); }
 .stance-away { background:rgba(200,30,50,.12); }
@@ -1825,10 +1825,20 @@ body {
 .cw-scroll { display:flex; flex-direction:column; gap:5px; }
 .cw-text { font-style:italic; }
 
-/* Fix 3: 议会进行中隐藏控制左侧（避免与 ticker 重叠），只留历史记录 */
-body.session-active .control-left { display:none !important; }
-body.session-active .control-strip { height:44px !important; }
-body.session-active .history-feed { max-height:44px; }
+/* devil_reveal 卡片样式 */
+.devil-reveal-card { padding:10px 12px; background:rgba(240,192,64,.08); border-left:3px solid var(--gold); border-radius:0 6px 6px 0; margin-bottom:6px; }
+.dr-title { font-size:12px; font-weight:800; color:var(--gold-bright); margin-bottom:8px; }
+.dr-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-size:11px; }
+.dr-label { color:var(--text-dim); }
+.dr-val { font-weight:700; color:var(--text); }
+.dr-true { color:var(--gold-bright); }
+.dr-result { font-size:12px; font-weight:700; margin-top:6px; padding-top:6px; border-top:1px solid var(--border); color:var(--text-sub); }
+
+/* 议会进行中：隐藏 banner 和 select，只留按钮行 + seeds status + 历史 */
+body.session-active .featured-banner { display:none !important; }
+body.session-active #matchSel { display:none !important; }
+body.session-active .control-strip { height:56px !important; }
+body.session-active .history-feed { max-height:56px; }
 
 /* Fix 4: 结果卡分享按钮改为图片样式 */
 .cta-share-img { background:linear-gradient(90deg,rgba(200,168,50,.2),rgba(200,168,50,.1)); color:var(--gold-bright); border-color:var(--border-gold); }
