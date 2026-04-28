@@ -40,7 +40,7 @@
 | [football-data.org](https://www.football-data.org/) v4 | 英超赛程、近5场战绩、H2H历史、积分榜 | 需要免费 API Key |
 | [Fantasy Premier League API](https://fantasy.premierleague.com/api/) | 球员 xG/90、伤病状态、近期形态 | 完全免费，无需 Key |
 | [the-odds-api](https://the-odds-api.com/) | 实时欧赔（bet365），隐含概率、水钱计算 | 可选 |
-| [Moonshot AI](https://moonshot.cn/) | LLM 对话生成（兼容 OpenAI SDK） | 需要 API Key |
+| [火山方舟 Coding Plan](https://ark.cn-beijing.volces.com/) | LLM 对话生成（DeepSeek-v3.2，兼容 OpenAI SDK） | 需要 API Key，双 key 轮询 |
 
 FPL 数据不可用时，系统自动降级并在界面提示，不影响整体运行。
 
@@ -62,7 +62,8 @@ npm install
 
 ```env
 FOOTBALL_DATA_API_KEY=your_key_here   # football-data.org 免费注册获取
-MOONSHOT_API_KEY=your_key_here        # moonshot.cn 控制台获取
+VOLC_API_KEY_1=your_key_here          # 火山方舟控制台获取
+VOLC_API_KEY_2=your_key_here          # 第二把 key（可选，用于双 key 负载均衡）
 ODDS_API_KEY=your_key_here            # the-odds-api.com（可选）
 ```
 

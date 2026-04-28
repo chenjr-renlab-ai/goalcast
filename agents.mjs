@@ -1,11 +1,22 @@
 import OpenAI from "openai";
 
-const client = new OpenAI({
-  apiKey: process.env.MOONSHOT_API_KEY,
-  baseURL: "https://api.moonshot.cn/v1",
-});
+// 火山方舟 Coding Plan — 双 key 轮询，并发时两把 key 各自配额独立
+const VOLC_BASE_URL = "https://ark.cn-beijing.volces.com/api/coding/v3";
+const VOLC_KEYS = [
+  process.env.VOLC_API_KEY_1,
+  process.env.VOLC_API_KEY_2,
+].filter(Boolean);
+if (VOLC_KEYS.length === 0) throw new Error("至少需要配置 VOLC_API_KEY_1 环境变量");
 
-const MODEL = "moonshot-v1-8k";
+const _volcClients = VOLC_KEYS.map(k => new OpenAI({ apiKey: k, baseURL: VOLC_BASE_URL }));
+let _volcIdx = 0;
+const getClient = () => {
+  const c = _volcClients[_volcIdx % _volcClients.length];
+  _volcIdx++;
+  return c;
+};
+
+const MODEL = "deepseek-v3.2";
 
 const AGENT_TEMPERATURE = {
   stat: 0.3,
@@ -603,7 +614,7 @@ export async function runCouncil(matchData, emit, options = {}) {
 
     let res;
     try {
-      res = await client.chat.completions.create({
+      res = await getClient().chat.completions.create({
         model: MODEL,
         max_tokens: maxTokens,
         temperature: AGENT_TEMPERATURE[agentId] ?? 0.7,
