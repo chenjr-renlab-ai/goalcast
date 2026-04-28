@@ -61,8 +61,9 @@ async function readCache(key) {
     const file = path.join(CACHE_DIR, `${key}.json`);
     const raw = await fs.promises.readFile(file, 'utf-8');
     const data = JSON.parse(raw);
-    if (data.expires > Date.now()) return data.value;
-    return null;
+    if (data.expires <= Date.now()) return null;
+    if (Array.isArray(data.value) && data.value.length === 0) return null;
+    return data.value;
   } catch {
     return null;
   }

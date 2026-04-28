@@ -943,12 +943,20 @@ ${thirdData.length ? '你的独占数据：\n' + thirdData.join('\n') + '\n' : '
   }
   emitBlackboardUpdate();
 
-  emit({ type: "phase", phase: "vote" });
+  // G: 意外时刻机制——15% 概率随机选一位专家获得"翻盘特权"
+  const surpriseAgentId = Math.random() < 0.15
+    ? EXPERTS[Math.floor(Math.random() * EXPERTS.length)]
+    : null;
+
+  emit({ type: "phase", phase: "vote", meta: surpriseAgentId ? { surprise: surpriseAgentId } : undefined });
   emit({ type: "thinking", agentId: "moderator" });
+  const surpriseHint = surpriseAgentId
+    ? `\n⚡ 特别提示：${AGENT_NAMES[surpriseAgentId]} 今晚有权完全颠覆自己的初判立场——用最戏剧化的方式引出这个可能性！`
+    : '';
   try {
     addMsg(await callAgent(
       "moderator",
-      `终投开始！你在对线中已经表明了倾向，现在煽动5位裁判做最终裁决，不超过20字，节奏要快`,
+      `终投开始！你在对线中已经表明了倾向，现在煽动5位裁判做最终裁决，不超过20字，节奏要快${surpriseHint}`,
       "vote"
     ));
   } catch (e) {

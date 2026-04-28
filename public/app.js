@@ -51,9 +51,32 @@ const PHASE_LABELS = { opening:'开场', initial:'初判', debate:'对线', vote
 const PHASE_FULL   = { opening:'开  场', initial:'初  判', debate:'对  线', vote:'终  投' };
 const PHASES_ORDER = ['opening','initial','debate','vote'];
 
+// B: 方法来源标签
+const AGENT_METHOD_LABEL = {
+  stat:      'Poisson · football-data进失球',
+  gambler:   '跨平台盘口 · the-odds-api赔率',
+  history:   '历史情景 · football-data H2H',
+  psych:     '语义分析 · FPL球员状态',
+  mystic:    '舆情叙事 · 市场情绪',
+  moderator: '综合裁判',
+};
+
+// D: 比赛重要性分级（焦点战排序）
+const STAKES_ORDER = { title: 0, relegation: 1, top4: 2, mixed: 3, mid: 4 };
+const STAKES_BADGE = { title:'🔥 争冠', relegation:'⚠️ 保级', top4:'🌟 争四', mixed:'↕️ 上下', mid:'' };
+
+// H: 阶段说明文字
+const PHASE_DESC = {
+  opening:  '议长开场，介绍今日交锋焦点',
+  initial:  '5位专家独立分析，各凭私有数据',
+  reaction: '分歧最大的两方互怼方法论',
+  vote:     '终极裁决——是否被对线说服？',
+};
+
 let allMatches=[], currentMatchData=null, currentEs=null;
 let sessionCatchphrases=[], sessionScenes=[];
 let userPrediction=null, selectedPick=null;
+let agentAccuracyProfiles = {};
 let userScore = { home: 0, away: 0 };  // 用户比分预测
 let agentPredictedScores = {};          // 各 agent 初判比分
 let isDraggingMarker = false;
@@ -332,15 +355,33 @@ async function triggerVideoGeneration(playerName, actionText) {
   } catch { /* no HF token — silent */ }
 }
 
+// ── 准确率数据加载 ────────────────────────────────────────
+async function fetchAccuracyProfiles() {
+  try {
+    agentAccuracyProfiles = await fetch('/api/memory/profiles').then(r => r.json());
+  } catch { /* silent fail */ }
+}
+
 // ── Init ─────────────────────────────────────────────────
 async function init() {
   injectOverlays();
   buildAgentColumns();
   buildCouncilSeats();
-  // 3D canvas removed; scene3d.js still loaded but canvas absent — no-op
   const canvas = document.getElementById('threeCanvas');
   if (canvas && window.THREE && window.Scene3D) Scene3D.init(canvas);
-  await loadMatches();
+  await Promise.all([loadMatches(), fetchAccuracyProfiles()]);
+
+  // I-2: SSE 页面关闭时主动断开，防止服务端 token 泄漏
+  window.addEventListener('beforeunload', () => { currentEs?.close(); currentEs = null; });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && currentEs) { currentEs.close(); currentEs = null; }
+  });
+
+  // Onboarding: 首次访问弹窗
+  if (!localStorage.getItem('oracle_visited')) {
+    const ol = document.getElementById('onboardingOverlay');
+    if (ol) ol.style.display = 'flex';
+  }
 }
 
 // ── Agent column cards ────────────────────────────────────
@@ -354,6 +395,16 @@ function buildAgentColumns() {
 
 function makeAgentCard(id) {
   const a = AGENTS[id];
+  const prof = agentAccuracyProfiles[id];
+  const total = prof?.total || 0;
+  const pct = total > 0 ? Math.round(prof.correct / total * 100) : null;
+  const icons = total > 0 ? Array(Math.min(total, 5)).fill(0).map((_, i) =>
+    i < (prof.correct || 0) ? '<span class="acc-tick">✓</span>' : '<span class="acc-miss">✗</span>'
+  ).join('') : '';
+  const accHtml = total > 0
+    ? `<div class="ac-accuracy"><span class="ac-icons">${icons}</span><span class="ac-pct">${pct}%</span><span class="ac-n">近${total}场</span></div>`
+    : `<div class="ac-accuracy ac-empty">首场预测中…</div>`;
+
   const div = document.createElement('div');
   div.className = 'agent-card';
   div.id = `card-${id}`;
@@ -365,8 +416,21 @@ function makeAgentCard(id) {
       <div class="ac-name">${a.name}</div>
       <div class="ac-title">${a.title}</div>
     </div>
+    ${accHtml}
+    <div class="ac-stance" id="stance-${id}"></div>
     <div class="ac-dot"></div>`;
   return div;
+}
+
+function updateAgentStanceDisplay(agentId, pick, conf) {
+  const el = document.getElementById(`stance-${agentId}`);
+  if (!el) return;
+  const icons = { home: '🏠', draw: '⚖️', away: '✈️' };
+  const pct = Math.round((conf || 0.5) * 100);
+  el.innerHTML = pick
+    ? `<span class="stance-icon">${icons[pick] || '?'}</span><span class="stance-conf">${pct}%</span>`
+    : '';
+  el.className = `ac-stance stance-${pick || 'none'}`;
 }
 
 // ── Council chamber seats ─────────────────────────────────
@@ -540,17 +604,36 @@ function initProbBar() {
 }
 
 function renderProbBar() {
-  // 钳位：防止任何异常值产生 NaN 或超出范围
-  const clamp = v => (isNaN(v) || !isFinite(v)) ? 33 : Math.min(100, Math.max(0, v));
   const { home, draw, away, count } = probState;
-  const fmt = pct => count > 0 ? `${pct.toFixed(0)}%` : '—';
-  const setBar = (segId, valId, pct) => {
-    const s = document.getElementById(segId); if (s) s.style.width = `${pct.toFixed(1)}%`;
-    const v = document.getElementById(valId); if (v) v.textContent = fmt(pct);
-  };
-  setBar('probSegHome','probValHome', clamp(home));
-  setBar('probSegDraw','probValDraw', clamp(draw));
-  setBar('probSegAway','probValAway', clamp(away));
+  const fmt = pct => count > 0 ? `${Math.round(pct)}%` : '—';
+
+  // J: 拔河绳 SVG 版本
+  const knot = document.getElementById('tugKnot');
+  const tugHome = document.getElementById('tugHome');
+  const tugAway = document.getElementById('tugAway');
+  if (knot) {
+    const bias = home / (home + away + 0.001);
+    const cx = Math.round(bias * 800);
+    knot.setAttribute('cx', cx);
+    tugHome?.setAttribute('width', Math.max(0, cx - 9));
+    const awayX = Math.min(800, cx + 9);
+    tugAway?.setAttribute('x', awayX);
+    tugAway?.setAttribute('width', Math.max(0, 800 - awayX));
+    // 弹跳动画
+    knot.classList.remove('tug-bounce');
+    void knot.offsetWidth;
+    knot.classList.add('tug-bounce');
+  }
+
+  // 数值标签
+  const vh = document.getElementById('probValHome'); if (vh) vh.textContent = fmt(home);
+  const vd = document.getElementById('probValDraw'); if (vd) vd.textContent = fmt(draw);
+  const va = document.getElementById('probValAway'); if (va) va.textContent = fmt(away);
+
+  // 兼容旧版 prob-seg（如果存在）
+  const clamp = v => Math.min(100, Math.max(0, v));
+  const setBar = (segId, pct) => { const s = document.getElementById(segId); if (s) s.style.width = `${clamp(pct).toFixed(1)}%`; };
+  setBar('probSegHome', home); setBar('probSegDraw', draw); setBar('probSegAway', away);
 }
 
 function updateProbFromMsg(data) {
@@ -792,7 +875,12 @@ function skipPrediction() { skipScore(); }
 // ── Matches ───────────────────────────────────────────────
 async function loadMatches() {
   try {
-    allMatches = await fetch('/api/matches').then(r => r.json());
+    const raw = await fetch('/api/matches').then(r => r.json());
+    // D: 按比赛重要性排序
+    allMatches = [...raw].sort((a, b) =>
+      (STAKES_ORDER[a.leagueContext?.stakes] ?? 4) - (STAKES_ORDER[b.leagueContext?.stakes] ?? 4)
+    );
+
     const sel = document.getElementById('matchSel');
     sel.innerHTML = allMatches.map(m => {
       let dateStr = '';
@@ -800,8 +888,25 @@ async function loadMatches() {
         try { dateStr = ' · ' + new Date(m.utcDate).toLocaleDateString('zh-CN', { month:'2-digit', day:'2-digit' }); }
         catch(e) { dateStr = ' · ' + m.utcDate; }
       }
-      return `<option value="${m.id}">${m.homeFlag} ${m.home} vs ${m.away} ${m.awayFlag} · ${m.stage}${dateStr}</option>`;
+      const badge = STAKES_BADGE[m.leagueContext?.stakes] || '';
+      const diff = Math.abs((m.leagueContext?.homePoints||0) - (m.leagueContext?.awayPoints||0));
+      const diffStr = diff > 0 ? ` · 差${diff}分` : '';
+      return `<option value="${m.id}">${badge ? badge+' ' : ''}${m.homeFlag} ${m.home} vs ${m.away} ${m.awayFlag} · ${m.stage}${dateStr}${diffStr}</option>`;
     }).join('');
+
+    // D: 今日焦点战横幅
+    const featured = allMatches.find(m => ['title','relegation'].includes(m.leagueContext?.stakes));
+    const banner = document.getElementById('featuredMatchBanner');
+    if (banner && featured) {
+      const badge = STAKES_BADGE[featured.leagueContext.stakes];
+      banner.innerHTML = `${badge} 今日焦点：<strong>${featured.home} vs ${featured.away}</strong> · ${featured.stage}`;
+      banner.style.display = 'block';
+      banner.onclick = () => {
+        sel.value = featured.id;
+        sel.dispatchEvent(new Event('change'));
+      };
+    }
+
     await loadMatchDetail(allMatches[0].id);
   } catch(e) { console.error(e); }
 }
@@ -1315,9 +1420,13 @@ function handleMessage(data) {
     for (const n of wikiNames) {
       if (textToScan.includes(n)) { found = n; break; }
     }
-    if (found) {
-      queueHero(found, data.scenePrediction || data.speech, data.agentId);
-    }
+    if (found) queueHero(found, data.scenePrediction || data.speech, data.agentId);
+  }
+  // A: 更新 agent 卡片立场指示器（conf 归一化到 0-1）
+  if (data.structured?.winner) {
+    const rawConf = data.structured.confidence;
+    const normConf = rawConf > 1 ? rawConf / 100 : (rawConf || 0.5);
+    updateAgentStanceDisplay(data.agentId, data.structured.winner, normConf);
   }
 }
 
@@ -1363,8 +1472,11 @@ function updateBroadcast(data, agent) {
   const card = document.createElement('div');
   card.className = `bc-card bc-active${isMod ? ' moderator-card' : ''}${isReaction ? ' reaction-card' : ''}`;
   card.dataset.phase = data.phase;
+  card.dataset.agentId = data.agentId; // C: agent 视觉指纹用
   card.style.setProperty('--seat-color', agent.cssColor);
   card.style.setProperty('--agent-color', agent.cssColor);
+
+  const methodLabel = AGENT_METHOD_LABEL[data.agentId] || '';
 
   card.innerHTML = `
     <div class="bc-compact-line">
@@ -1383,6 +1495,7 @@ function updateBroadcast(data, agent) {
           <div class="bc-agent-name">${escapeHtml(agent.name)}</div>
           <span class="bc-phase-badge ${badgeCls}">${phaseLabel}</span>
         </div>
+        ${methodLabel ? `<div class="bc-source-layer">${escapeHtml(methodLabel)}</div>` : ''}
         <div class="bc-speech">${speech}</div>
         ${data.catchphrase ? `<div class="bc-catchphrase">${escapeHtml(data.catchphrase)}</div>` : ''}
         ${data.scenePrediction ? `<div class="bc-scene">${escapeHtml(data.scenePrediction)}</div>` : ''}
@@ -1424,11 +1537,13 @@ function appendPhaseBanner(phase, meta) {
   const b = document.createElement('div');
   b.className = 'phase-banner';
   let label = PHASE_LABELS[phase] || phase;
-  if (phase==='debate'&&meta) {
-    const a=AGENTS[meta.agentA], bb=AGENTS[meta.agentB];
+  let desc = PHASE_DESC[phase] || '';
+  if (phase === 'debate' && meta) {
+    const a = AGENTS[meta.agentA], bb = AGENTS[meta.agentB];
     label = `💥 对线 · ${a?.name} vs ${bb?.name}`;
+    desc = `${a?.name || '?'} vs ${bb?.name || '?'} 方法论碰撞`;
   }
-  b.innerHTML = `<div class="banner-line"></div><span>${label}</span><div class="banner-line"></div>`;
+  b.innerHTML = `<div class="banner-line"></div><span>${label}</span><div class="banner-line"></div>${desc ? `<div class="phase-desc">${desc}</div>` : ''}`;
   container.appendChild(b);
   // 3.5 秒后自动消失，不永久挡住议事厅
   setTimeout(() => { b.style.transition='opacity 0.5s'; b.style.opacity='0'; setTimeout(()=>b.remove(),500); }, 3500);
@@ -1526,27 +1641,24 @@ function handleSummary({ results, match, evHome, evDraw, evAway }) {
 
     let userCompareHtml = '';
     if (userPrediction) {
-      const userCorrect = userPrediction === winner.key;
-      const raw = JSON.parse(localStorage.getItem('oracle_stats') || '{"total":0,"correct":0}');
-      raw.total++; if (userCorrect) raw.correct++;
-      localStorage.setItem('oracle_stats', JSON.stringify(raw));
-      const accuracy = (raw.correct / raw.total * 100).toFixed(0);
+      const agreesWithCouncil = userPrediction === winner.key;
       const pickLabel = { home:`${home} 胜`, draw:'平局', away:`${away} 胜` }[userPrediction];
       userCompareHtml = `
         <div class="user-comparison">
-          <div class="ucr-title">⚔️ 你 vs 议 会</div>
+          <div class="ucr-title">🎯 你 vs 议会倾向</div>
           <div class="ucr-row">
             <div class="ucr-side">
               <div class="ucr-label">你的预测</div>
-              <div class="ucr-pick ${userCorrect?'correct':'wrong'}">${pickLabel}</div>
+              <div class="ucr-pick">${pickLabel}</div>
             </div>
-            <div class="ucr-vs">${userCorrect?'✓':'✗'}</div>
+            <div class="ucr-vs">${agreesWithCouncil ? '✓' : '✗'}</div>
             <div class="ucr-side">
               <div class="ucr-label">议会裁决</div>
-              <div class="ucr-pick correct">${winner.label.trim()}</div>
+              <div class="ucr-pick">${winner.label.trim()}</div>
             </div>
           </div>
-          <div class="ucr-stats">历史胜率 ${accuracy}% · ${raw.correct}/${raw.total} 场</div>
+          <div class="ucr-agree ${agreesWithCouncil?'agree-yes':'agree-no'}">${agreesWithCouncil?'✓ 与议会方向一致':'✗ 与议会方向不同'}</div>
+          <div class="ucr-note">比赛结束后录入实际比分，更新 AI 准确率记录</div>
         </div>`;
     }
     const predTimelineHtml = buildPredictionTimeline();
@@ -1594,7 +1706,21 @@ function handleSummary({ results, match, evHome, evDraw, evAway }) {
       </div>
       <div class="rebalance-note">↑ 经 W-5 概率校正层调整</div>`:''}
       ${userCompareHtml}${predTimelineHtml}${scHtml}${cwHtml}
-      <button class="reset-btn" onclick="resetCouncil()">↺ 重新召开议会</button>`;
+      <div class="results-cta-row">
+        <button class="cta-btn cta-share" onclick="copyResultSummary()">📋 复制战报</button>
+        <button class="cta-btn cta-record" onclick="showResultInputInline()">📝 录入比分</button>
+        <button class="cta-btn cta-next" onclick="resetCouncil()">↺ 下一场</button>
+      </div>
+      <div id="resultInputInline" style="display:none">
+        <div class="rii-label">录入比赛实际比分 · 更新 AI 准确率</div>
+        <div class="rii-row">
+          <input id="riiHome" type="number" min="0" max="20" value="0" class="rii-input">
+          <span class="rii-vs">:</span>
+          <input id="riiAway" type="number" min="0" max="20" value="0" class="rii-input">
+          <button onclick="submitActualResultInline()" class="rii-submit">确认</button>
+        </div>
+        <div class="rii-note">录入后各 AI 角色历史准确率自动更新</div>
+      </div>`;
     c.appendChild(card);
     c.classList.add('active');
     // 点击背景关闭（点到卡片内部不关闭）
@@ -1672,6 +1798,68 @@ function handleError(msg) {
   d.textContent=`⚠️ ${msg}`;
   document.getElementById('feed').appendChild(d);
   enableControls();
+}
+
+function copyResultSummary() {
+  const m = currentMatchData;
+  const verdict = document.querySelector('.verdict')?.textContent || '';
+  const top = sessionCatchphrases.slice(0,2).map(c=>`「${c.text}」——${c.name}`).join('\n');
+  const summary = [
+    `🔮 预言者议会 · ${m?.home||'主队'} vs ${m?.away||'客队'} ${m?.stage||''}`,
+    verdict,
+    userPrediction ? `👤 你的预测：${{home:`${m?.home}胜`,draw:'平局',away:`${m?.away}胜`}[userPrediction]||'?'}` : '',
+    top ? `\n🔥 今晚金句：\n${top}` : '',
+    '\n via Goalcast AI 预测议会',
+  ].filter(Boolean).join('\n');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(summary).then(() => showToast('战报已复制，快去发给朋友！'));
+  } else {
+    prompt('复制以下内容：', summary);
+  }
+}
+
+function showResultInputInline() {
+  const el = document.getElementById('resultInputInline');
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function submitActualResultInline() {
+  const h = parseInt(document.getElementById('riiHome')?.value) || 0;
+  const a = parseInt(document.getElementById('riiAway')?.value) || 0;
+  const m = currentMatchData;
+  try {
+    const res = await fetch('/api/result', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ matchId: m?.id, actualScore: [h, a] }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('resultInputInline').style.display = 'none';
+      if (userScore.home !== null) {
+        const hit = calcClientHitLevel([userScore.home, userScore.away], [h, a]);
+        const msgs = { perfect:'🏆 完美命中！你猜中了！', precise:'⭐ 精准！方向和进球数都接近', valid:'✅ 方向正确', close:'💡 进球数相差1球', miss:'❌ 这次没猜到' };
+        showToast(msgs[hit] || '✅ 已录入');
+      } else {
+        showToast('✅ 已录入，AI准确率已更新');
+      }
+      agentAccuracyProfiles = {};
+      fetchAccuracyProfiles();
+    }
+  } catch(e) { showToast('录入失败，请重试'); }
+}
+
+function showToast(msg) {
+  let t = document.getElementById('globalToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'globalToast';
+    t.className = 'global-toast';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.classList.add('toast-show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('toast-show'), 3000);
 }
 
 function resetCouncil() {

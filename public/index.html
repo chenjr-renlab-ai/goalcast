@@ -43,7 +43,7 @@
   </div>
 </header>
 
-<!-- ── Probability Bar ── -->
+<!-- ── Probability Bar (拔河绳) ── -->
 <div class="prob-bar-wrap" id="probBarWrap">
   <div class="prob-bar-teams">
     <span id="probHomeLabel">主队</span>
@@ -51,14 +51,27 @@
     <span id="probAwayLabel">客队</span>
   </div>
   <div class="prob-bar-track" id="probBarTrack">
-    <div class="prob-seg prob-home" id="probSegHome" style="width:33%">
-      <span class="prob-val" id="probValHome">—</span>
-    </div>
-    <div class="prob-seg prob-draw" id="probSegDraw" style="width:34%">
-      <span class="prob-val" id="probValDraw">—</span>
-    </div>
-    <div class="prob-seg prob-away" id="probSegAway" style="width:33%">
-      <span class="prob-val" id="probValAway">—</span>
+    <svg class="tug-svg" viewBox="0 0 800 36" id="tugSvg" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="tugGradHome" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#0e3a7a"/>
+          <stop offset="100%" stop-color="#2266ee"/>
+        </linearGradient>
+        <linearGradient id="tugGradAway" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#cc2233"/>
+          <stop offset="100%" stop-color="#880d18"/>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="15" width="800" height="6" rx="3" fill="rgba(255,255,255,0.08)"/>
+      <rect id="tugHome" x="0" y="13" width="370" height="10" rx="3" fill="url(#tugGradHome)"/>
+      <rect id="tugAway" x="430" y="13" width="370" height="10" rx="3" fill="url(#tugGradAway)"/>
+      <rect x="370" y="10" width="60" height="16" rx="3" fill="rgba(180,140,30,0.12)" stroke="rgba(200,160,40,0.3)" stroke-width="1"/>
+      <circle id="tugKnot" cx="400" cy="18" r="9" fill="#c8a832" stroke="#f0d060" stroke-width="1.5"/>
+    </svg>
+    <div class="tug-values">
+      <span id="probValHome" class="tug-val tug-home">33%</span>
+      <span id="probValDraw" class="tug-val tug-draw">34%</span>
+      <span id="probValAway" class="tug-val tug-away">33%</span>
     </div>
     <div class="prob-user-marker" id="probUserMarker"></div>
   </div>
@@ -176,6 +189,7 @@
 <!-- ── Control Strip ── -->
 <div class="control-strip">
   <div class="control-left">
+    <div id="featuredMatchBanner" class="featured-banner" style="display:none"></div>
     <select class="match-selector" id="matchSel" onchange="onMatchChange(event)"></select>
     <div class="ctrl-btn-row">
       <button class="start-btn" id="startBtn" onclick="startCouncil()">⚡ 召开议会</button>
@@ -281,6 +295,32 @@
 </div>
 
 <div id="resultsContainer"></div>
+
+<!-- H: Onboarding 首次访问引导 -->
+<div id="onboardingOverlay" class="onb-overlay" style="display:none">
+  <div class="onb-panel">
+    <div class="onb-head">🔮 欢迎来到预言者议会</div>
+    <div class="onb-steps">
+      <div class="onb-step">
+        <div class="onb-icon">⚽</div>
+        <div class="onb-title">选一场真实英超比赛</div>
+        <div class="onb-desc">赔率来自 bet365，球员数据来自 FPL，历史交锋来自 football-data.org</div>
+      </div>
+      <div class="onb-step">
+        <div class="onb-icon">🎯</div>
+        <div class="onb-title">先押你的比分预测</div>
+        <div class="onb-desc">议会开始前你先亮底牌——最后看是你准还是 AI 准</div>
+      </div>
+      <div class="onb-step">
+        <div class="onb-icon">⚔️</div>
+        <div class="onb-title">看 6 个 AI 用不同数据辩论</div>
+        <div class="onb-desc">冰狗用Poisson概率，赌狗看盘口资金，碎碎念分析采访文本——方法不同，你来判断谁更可信</div>
+      </div>
+    </div>
+    <button id="onbStart" class="onb-btn" onclick="localStorage.setItem('oracle_visited','1');this.closest('.onb-overlay').style.display='none'">开始观战 →</button>
+    <div class="onb-skip" onclick="localStorage.setItem('oracle_visited','1');this.closest('.onb-overlay').style.display='none'">我已了解，跳过</div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script>
 <script src="scene3d.js"></script>
