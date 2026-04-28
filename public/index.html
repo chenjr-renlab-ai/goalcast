@@ -199,6 +199,7 @@
     </div>
     <div id="seedsStatus"></div>
   </div>
+  <div class="history-feed" id="feed"></div>
 </div>
 
 <!-- U5: 终投实时计数器 -->
@@ -207,16 +208,6 @@
   <span id="vtHome" class="vt-item vt-home">🏠 0票</span>
   <span id="vtDraw" class="vt-item vt-draw">⚖️ 0票</span>
   <span id="vtAway" class="vt-item vt-away">✈️ 0票</span>
-</div>
-
-<!-- U3: 历史记录移到 broadcast 下方，折叠式，不占主区域夹层 -->
-<div id="historyFeedCollapse" class="hf-collapse" style="display:none">
-  <div class="hf-toggle" onclick="toggleHistoryFeed()">
-    <span>📜 对话历史</span>
-    <span id="hfCount" class="hf-count">0</span>条
-    <span class="hf-arrow" id="hfArrow">▲</span>
-  </div>
-  <div id="feed" class="hf-inner history-feed" style="display:none"></div>
 </div>
 
 <!-- Feature 5: Live Ticker — 固定在页面最底部 -->

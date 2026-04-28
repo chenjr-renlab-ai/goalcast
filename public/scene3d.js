@@ -1557,26 +1557,33 @@ window.Scene3D = (() => {
     };
   }
 
-  function setAgentSpeaking(id) {
+  function setAgentSpeaking(id, moveCam) {
     orbitPaused = true;
     currentSpeakerId = id;
     const n = nodes[id]; if (!n) return;
-    n.light.intensity = 6; n.light.distance = 20;
-    n.sprite.scale.setScalar(3.0);
-    if (n.hex) { n.hex.material.emissiveIntensity = 1.4; }
-    if (n.beam) { n.beam.material.opacity = .22; }
-    // 相机永远在正面（z > 6），英雄卡墙（z≈-9.5）始终在背景
-    // 根据 agent X 位置左右偏移，形成对角视角
-    const SAFE_Y = 5.6;
-    const horizOff = -n.x * 0.75; // 水平偏向 agent 对侧
-    const camZ = Math.max(8, 14 - Math.abs(horizOff) * 0.25); // z 始终正值
-    camState.pos.set(horizOff, SAFE_Y, camZ);
-    camState.look.set(n.x * 0.45, 2.0, n.z * 0.3);
-    camLerp = 0.055;
-    spawnBurst(id);
+    // 降低效果强度，减少突兀感
+    n.light.intensity = 3.0; n.light.distance = 16;
+    n.sprite.scale.setScalar(2.5);
+    if (n.hex) { n.hex.material.emissiveIntensity = 0.9; }
+    if (n.beam) { n.beam.material.opacity = .16; }
     setEnergyArc(id);
     setSpeakingHalo(id);
     AGENT_ORDER.forEach(o => { if (o !== id) _dim(o, true); });
+    // 仅在需要移动摄像机时才切换视角（reaction 不移动，避免来回跳）
+    if (moveCam !== false) {
+      const SAFE_Y = 5.2;
+      const horizOff = -n.x * 0.6;
+      const camZ = Math.max(9, 14 - Math.abs(horizOff) * 0.2);
+      camState.pos.set(horizOff, SAFE_Y, camZ);
+      camState.look.set(n.x * 0.4, 2.2, n.z * 0.25);
+      camLerp = 0.07;
+    }
+    spawnBurst(id);
+  }
+
+  // 仅高亮节点，不移动摄像机（用于 reaction phase）
+  function setAgentHighlight(id) {
+    setAgentSpeaking(id, false);
   }
 
   function setAgentThinking(id) {
@@ -1595,10 +1602,11 @@ window.Scene3D = (() => {
 
   function _dim(id, heavy) {
     const n = nodes[id]; if (!n) return;
-    n.light.intensity = heavy ? .06 : .15;
-    n.sprite.scale.setScalar(heavy ? .6 : .88);
-    n.hex.material.emissiveIntensity = heavy ? .04 : .1;
-    n.beam.material.opacity = heavy ? .015 : .04;
+    // 提高暗化底限，减少明暗跳变的突兀感
+    n.light.intensity = heavy ? .18 : .3;
+    n.sprite.scale.setScalar(heavy ? .8 : 1.0);
+    n.hex.material.emissiveIntensity = heavy ? .08 : .14;
+    n.beam.material.opacity = heavy ? .03 : .055;
   }
 
   function resetAll() {
@@ -1737,5 +1745,5 @@ window.Scene3D = (() => {
     statsBoardTex.needsUpdate = true;
   }
 
-  return { init, setAgentSpeaking, setAgentThinking, resetAll, updateStatsDisplay, loadPlayerBanners };
+  return { init, setAgentSpeaking, setAgentHighlight, setAgentThinking, resetAll, updateStatsDisplay, loadPlayerBanners };
 })();

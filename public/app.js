@@ -390,19 +390,7 @@ function showOnboarding() {
   if (ol) ol.style.display = 'flex';
 }
 
-// U3: 历史记录折叠/展开
-function toggleHistoryFeed() {
-  const f = document.getElementById('feed');
-  const arrow = document.getElementById('hfArrow');
-  if (!f) return;
-  const isOpen = f.style.display !== 'none';
-  f.style.display = isOpen ? 'none' : 'block';
-  if (arrow) arrow.textContent = isOpen ? '▲' : '▼';
-}
-function updateHistoryCount() {
-  const c = document.getElementById('hfCount');
-  if (c) c.textContent = document.querySelectorAll('#feed .history-item').length;
-}
+function updateHistoryCount() { /* no-op, retained for compatibility */ }
 
 // ── Agent column cards ────────────────────────────────────
 const LEFT_AGENTS  = ['stat', 'mystic', 'history'];
@@ -1092,10 +1080,6 @@ function doStartCouncil() {
   document.getElementById('feed').innerHTML      = '';
   document.getElementById('resultsContainer').innerHTML = '';
   document.getElementById('liveBadge').classList.add('active');
-  // U3: 显示历史折叠区
-  const _hfc = document.getElementById('historyFeedCollapse');
-  if (_hfc) { _hfc.style.display = 'block'; }
-  updateHistoryCount();
   document.getElementById('matchDrawer')?.classList.remove('open');
   document.querySelectorAll('.phase-step').forEach(s => s.classList.remove('active','done'));
   // clear stance / consensus panels
@@ -1413,8 +1397,13 @@ function renderConsensus(level, container) {
 }
 
 function handleMessage(data) {
-  // U4: 所有 phase 都更新 3D 高亮，确保发言者与议事厅角色始终对应
-  setSpeaking(data.agentId, false);
+  // reaction: 只更新卡片高亮，不移动摄像机（两人连续快速互怼会导致摄像机来回跳）
+  // 其他所有 phase: 正常更新卡片 + 摄像机
+  if (data.phase === 'reaction') {
+    setSpeakingReaction(data.agentId);
+  } else {
+    setSpeaking(data.agentId, false);
+  }
   // Update split screen if active
   if (splitScreenActive && (data.agentId === ssAgentA || data.agentId === ssAgentB)) {
     updateSplitScreenStance(data.agentId);
@@ -1650,6 +1639,28 @@ function setSpeaking(id, isThinking=false) {
   if (!id) { window.Scene3D?.resetAll(); return; }
   if (isThinking) window.Scene3D?.setAgentThinking(id);
   else            window.Scene3D?.setAgentSpeaking(id);
+}
+
+// reaction phase: 卡片亮起但摄像机不跳
+function setSpeakingReaction(id) {
+  if (!id) return;
+  document.querySelectorAll('.agent-card').forEach(c => {
+    c.classList.remove('speaking', 'thinking', 'idle-bg');
+    if (c.id !== `card-${id}`) c.classList.add('idle-bg');
+  });
+  const card = document.getElementById(`card-${id}`);
+  if (card) card.classList.add('speaking');
+  const hud = document.getElementById('speakerHud');
+  if (hud) {
+    const a = AGENTS[id];
+    const iconEl = document.getElementById('speakerHudIcon');
+    const nameEl = document.getElementById('speakerHudName');
+    if (iconEl) iconEl.textContent = a?.icon || '';
+    if (nameEl) nameEl.textContent = a?.name || id;
+    hud.style.setProperty('--speaker-color', a?.cssColor || '#fff');
+    hud.classList.add('active');
+  }
+  window.Scene3D?.setAgentHighlight(id);
 }
 
 // ── Summary ───────────────────────────────────────────────
@@ -1912,10 +1923,6 @@ function resetCouncil() {
   if(currentEs){currentEs.close();currentEs=null;}
   document.body.classList.remove('session-active');
   document.getElementById('feed').innerHTML='';
-  const _hfcReset = document.getElementById('historyFeedCollapse');
-  if (_hfcReset) { _hfcReset.style.display = 'none'; }
-  if (document.getElementById('hfArrow')) document.getElementById('hfArrow').textContent = '▲';
-  if (document.getElementById('feed')) document.getElementById('feed').style.display = 'none';
   const rc = document.getElementById('resultsContainer');
   rc.innerHTML = ''; rc.classList.remove('active');
   const bp=document.getElementById('broadcastPanel');
