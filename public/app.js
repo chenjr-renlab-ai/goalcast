@@ -1193,7 +1193,13 @@ function handlePhase({ phase, meta }) {
 }
 
 function handleThinking({ agentId }) {
-  setSpeaking(agentId, true);
+  // 只做卡片 CSS 脉冲，不更新 3D——避免 3D 提前切换到下一个 agent
+  // 而广播还在显示上一个 agent 的发言（reading delay 期间）
+  const card = document.getElementById(`card-${agentId}`);
+  if (card) {
+    card.classList.remove('speaking', 'idle-bg');
+    card.classList.add('thinking');
+  }
 }
 
 function handleBlackboardUpdate(d) {
@@ -1668,8 +1674,10 @@ function handleSummary({ results, match, evHome, evDraw, evAway }) {
   setSpeaking(null);
   document.getElementById('liveBadge').classList.remove('active');
   document.querySelectorAll('.phase-step').forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
-  // 恢复概率条
   document.body.classList.remove('session-active');
+  // 隐藏终投计数条（summary后不再需要）
+  const _vt = document.getElementById('voteTally');
+  if (_vt) _vt.style.display = 'none';
   showPhaseFlash('vote');
 
   setTimeout(() => {
@@ -1764,7 +1772,7 @@ function handleSummary({ results, match, evHome, evDraw, evAway }) {
       <div class="rebalance-note">↑ 经 W-5 概率校正层调整</div>`:''}
       ${userCompareHtml}${predTimelineHtml}${scHtml}${cwHtml}
       <div class="results-cta-row">
-        <button class="cta-btn cta-share" onclick="copyResultSummary()">📋 复制战报</button>
+        <button class="cta-btn cta-share cta-share-img" onclick="copyResultSummary()">🖼️ 生成战报图片</button>
         <button class="cta-btn cta-record" onclick="showResultInputInline()">📝 录入比分</button>
         <button class="cta-btn cta-next" onclick="resetCouncil()">↺ 下一场</button>
       </div>
@@ -1859,20 +1867,101 @@ function handleError(msg) {
 
 function copyResultSummary() {
   const m = currentMatchData;
-  const verdict = document.querySelector('.verdict')?.textContent || '';
-  const top = sessionCatchphrases.slice(0,2).map(c=>`「${c.text}」——${c.name}`).join('\n');
-  const summary = [
-    `🔮 预言者议会 · ${m?.home||'主队'} vs ${m?.away||'客队'} ${m?.stage||''}`,
-    verdict,
-    userPrediction ? `👤 你的预测：${{home:`${m?.home}胜`,draw:'平局',away:`${m?.away}胜`}[userPrediction]||'?'}` : '',
-    top ? `\n🔥 今晚金句：\n${top}` : '',
-    '\n via Goalcast AI 预测议会',
-  ].filter(Boolean).join('\n');
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(summary).then(() => showToast('战报已复制，快去发给朋友！'));
-  } else {
-    prompt('复制以下内容：', summary);
+  const verdict = document.querySelector('.verdict')?.textContent?.trim() || '';
+  const score = document.querySelector('.rcs-score')?.textContent?.trim() || '';
+  const scoreParts = score.split(/\s*[–\-]\s*/);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 640; canvas.height = 420;
+  const ctx = canvas.getContext('2d');
+
+  // 背景
+  ctx.fillStyle = '#010714';
+  ctx.fillRect(0, 0, 640, 420);
+  // 金边
+  ctx.strokeStyle = '#c8a832'; ctx.lineWidth = 2;
+  ctx.strokeRect(12, 12, 616, 396);
+  ctx.strokeStyle = 'rgba(200,168,50,.25)'; ctx.lineWidth = 1;
+  ctx.strokeRect(18, 18, 604, 384);
+
+  // 标题
+  ctx.fillStyle = '#c8a832';
+  ctx.font = 'bold 13px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('🔮  预言者议会  ·  AI 足球预测', 320, 48);
+
+  // 两队名
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 24px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText(`${m?.home||'主队'}  vs  ${m?.away||'客队'}`, 320, 84);
+
+  // 比赛信息
+  ctx.fillStyle = 'rgba(221,238,255,0.45)';
+  ctx.font = '11px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText(m?.stage || '', 320, 105);
+
+  // 分割线
+  ctx.strokeStyle = 'rgba(200,168,50,.3)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(60, 118); ctx.lineTo(580, 118); ctx.stroke();
+
+  // 议会比分
+  if (score) {
+    ctx.fillStyle = 'rgba(221,238,255,.4)';
+    ctx.font = '10px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText('议 会 综 合 预 测', 320, 140);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 72px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText(score, 320, 215);
   }
+
+  // 议会裁决
+  ctx.fillStyle = '#00d46a';
+  ctx.font = 'bold 16px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText(verdict, 320, 250);
+
+  // 金句（最多2条）
+  const quotes = sessionCatchphrases.slice(0, 2);
+  let qy = 278;
+  ctx.font = '12px "PingFang SC","Microsoft YaHei",sans-serif';
+  quotes.forEach(q => {
+    const text = `${q.name}：「${q.text.slice(0, 26)}${q.text.length > 26 ? '…' : ''}」`;
+    ctx.fillStyle = 'rgba(200,168,50,.85)';
+    ctx.fillText(text, 320, qy);
+    qy += 24;
+  });
+
+  // 用户预测
+  if (userPrediction) {
+    const labels = { home:`${m?.home}胜`, draw:'平局', away:`${m?.away}胜` };
+    ctx.fillStyle = 'rgba(221,238,255,.5)';
+    ctx.font = '11px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText(`你的预测：${labels[userPrediction]||'?'}`, 320, qy + 10);
+  }
+
+  // 底部来源
+  ctx.fillStyle = 'rgba(255,255,255,.2)';
+  ctx.font = '10px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText('via  Goalcast AI 预测议会  ·  goalcast.ai', 320, 400);
+
+  // 复制到剪贴板
+  canvas.toBlob(blob => {
+    if (!blob) { showToast('生成图片失败'); return; }
+    if (navigator.clipboard?.write) {
+      navigator.clipboard.write([new ClipboardItem({'image/png': blob})])
+        .then(() => showToast('📸 战报图片已复制！可直接粘贴分享'))
+        .catch(() => _downloadImg(canvas));
+    } else {
+      _downloadImg(canvas);
+    }
+  }, 'image/png');
+}
+
+function _downloadImg(canvas) {
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = 'oracle-council.png';
+  a.click();
+  showToast('📥 战报已下载，可发给朋友！');
 }
 
 function showResultInputInline() {

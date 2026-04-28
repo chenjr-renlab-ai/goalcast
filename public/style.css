@@ -1509,9 +1509,10 @@ body.session-active .prob-bar-wrap {
   padding: 14px 0; border-top: 1px solid rgba(0,200,80,0.1);
   border-bottom: 1px solid rgba(0,200,80,0.1); margin: 10px 0;
 }
-.rcs-label { font-size: 9px; color: var(--text-dim); letter-spacing: 3px; text-transform: uppercase; }
-.rcs-score { font-size: 48px; font-weight: 900; color: #fff; letter-spacing: 8px; line-height: 1.1; text-shadow: 0 0 30px rgba(0,200,80,0.4); }
-.rcs-teams { font-size: 10px; color: var(--text-sub); }
+/* Fix 4: 结果卡比分区域可读性改进 */
+.rcs-label { font-size: 11px; color: var(--text-sub); letter-spacing: 2px; text-transform: uppercase; }
+.rcs-score { font-size: 54px; font-weight: 900; color: #fff; letter-spacing: 10px; line-height: 1.1; text-shadow: 0 0 30px rgba(0,200,80,0.5), 0 2px 4px rgba(0,0,0,.8); }
+.rcs-teams { font-size: 12px; color: var(--text-sub); font-weight: 600; }
 
 /* 用户命中等级（在 results 内） */
 .results-hit { text-align: center; padding: 8px; border-radius: 6px; font-size: 14px; font-weight: 800; margin: 8px 0; }
@@ -1823,3 +1824,12 @@ body {
 /* 金句墙横向滚动优化 */
 .cw-scroll { display:flex; flex-direction:column; gap:5px; }
 .cw-text { font-style:italic; }
+
+/* Fix 3: 议会进行中隐藏控制左侧（避免与 ticker 重叠），只留历史记录 */
+body.session-active .control-left { display:none !important; }
+body.session-active .control-strip { height:44px !important; }
+body.session-active .history-feed { max-height:44px; }
+
+/* Fix 4: 结果卡分享按钮改为图片样式 */
+.cta-share-img { background:linear-gradient(90deg,rgba(200,168,50,.2),rgba(200,168,50,.1)); color:var(--gold-bright); border-color:var(--border-gold); }
+.cta-share-img:hover { background:linear-gradient(90deg,rgba(200,168,50,.32),rgba(200,168,50,.18)); }
