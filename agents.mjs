@@ -36,32 +36,11 @@ const AGENT_DATA_ACCESS = {
   moderator: ["all"],
 };
 
-const PUBLIC_PROMPT = `你正在参加赛事预言节目「预言者议会」。
-
-【这个节目和赛前评论席的区别】
-普通评论员预测"谁赢"。你要预测"比赛怎么赢"——写出那个决定性时刻的分镜脚本。
-你在创作一个还没发生的故事，每个学派的版本都不一样，观众来判断谁的剧本最终成真。
-
-【发言风格】
-- 论坛/弹幕语气，虎扑/B站风格
-- 允许毒奶："我说X赢，大家快反向"
-- 允许条件预言："这场要赢，除非X使出[绝技名]"
-- 论坛梗词：寄了/绷不住了/离谱/破防/神仙局/彻底打穿
-- 必须点名具体球员
-
-【scenePrediction 字段——这是核心】
-initial 和 vote 阶段必填。30~60字的场景分镜：
-- 必须有具体预测分钟数（如"第71分钟"）
-- 必须有球员名字 + 具体动作
-- 用电影分镜的语感写，不是分析，是画面
-例："第78分钟——维尼修斯左路加速，甩开萨拉维亚，低平球传中——劳塔罗不在场上了，没人接——球滚出底线。就这样，胜负在这一刻定型。"
-
-【catchphrase 字段】
-每次必填，今晚最可能被截图的一句话（20字以内，含球员名）。
-
-【禁止】骑墙 / 中立 / "作为AI" / 正式报告体
-【数据规则】只能引用情报字段里明确给出的数字，情报字段如果是"无"或"数据暂无"则不能编造数字，改为用感性描述代替数字分析。
-【必须】调用 submit_speech 工具，不要自然语言回复。`;
+const PUBLIC_PROMPT = `「预言者议会」AI评论嘉宾。弹幕/论坛语气（虎扑/B站风），必须点名具体球员。
+scenePrediction（initial/vote阶段必填）：30-60字电影分镜，含分钟数+球员名+具体动作。
+catchphrase必填：20字内，今晚最可能被截图那句话，含球员名。
+禁止中立/骑墙/"作为AI"/正式报告体。只能引用给出的数字，数据为"无"则不得编造，改用感性描述。
+必须以纯JSON回复，不得输出JSON以外任何内容。`;
 
 const AGENT_PERSONAS = {
   stat: `你是「数据帝·冰狗」，AI驱动的 Poisson-Dixon-Coles 足球预测模型，弹幕风 UP 主人设包装。
@@ -588,50 +567,68 @@ export async function runCouncil(matchData, emit, options = {}) {
     blackboard.keyInsights.push(`${AGENT_NAMES[msg.agentId] || msg.agentId} → ${w}(${c}%)${f}`);
   }
 
-  async function callAgent(agentId, directive, phase, overrideBriefing, maxTokens = 500) {
-    const insightCtx =
-      blackboard.keyInsights.length > 0
-        ? `\n\n【场内已有${blackboard.keyInsights.length}条判断，请在发言中明确回应或反驳其中至少一条：】\n${blackboard.keyInsights.map((k) => `• ${k}`).join("\n")}`
-        : "";
+  // JSON 输出 schema（嵌入 system prompt，比 tool_choice schema ~300token 精简很多）
+  const JSON_SCHEMA = `【JSON输出格式，必须严格遵守】{"agentId":"ID","phase":"PHASE","speech":"50-80字正文","catchphrase":"20字金句","emotion":"excited|calm|skeptical|nervous|aggressive","predictionTag":"直球押注|毒奶预警|条件预言|反向操作|历史重演|玄学感应|心理分析","scenePrediction":"30-60字分镜含分钟数球员动作","structured":{"winner":"home|draw|away","score":[主整数,客整数],"confidence":0.0到1.0,"keyFactor":"20字内"}}`;
+
+  async function callAgent(agentId, directive, phase, overrideBriefing, maxTokens = 360) {
+    const insightCtx = blackboard.keyInsights.length > 0
+      ? `\n【场内判断（请回应或反驳至少一条）】${blackboard.keyInsights.slice(-4).map(k => `• ${k}`).join('；')}`
+      : "";
     const briefingText = overrideBriefing ?? buildAgentBriefing(match, agentId);
+    // 历史只保留最近8条，speech截断60字，减少token
+    const histSlice = blackboard.history.slice(-8).map(m => ({
+      id: m.id, agentId: m.agentId, phase: m.phase,
+      speech: (m.speech || "").slice(0, 60),
+      catchphrase: m.catchphrase,
+      ...(m.structured ? { w: m.structured.winner, c: m.structured.confidence } : {}),
+    }));
     const payload = JSON.stringify({
-      match: { home: match.home, away: match.away, context: match.context },
-      phase,
+      match: `${match.home} vs ${match.away}`,
       directive: directive + (phase !== "reaction" ? insightCtx : ""),
-      history: blackboard.history.slice(-14).map((m) => ({
-        id: m.id, agentId: m.agentId, phase: m.phase,
-        speech: m.speech, catchphrase: m.catchphrase, emotion: m.emotion,
-        ...(m.structured ? { structured: m.structured } : {}),
-      })),
+      history: histSlice,
     });
 
     const t0 = Date.now();
     logMonitor(blackboard, { type: "agent_start", agentId, phase });
 
-    const TIMEOUT_MS = 42000;
+    const TIMEOUT_MS = 30000;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-    let res;
+    let fullContent = '';
     try {
-      res = await getClient().chat.completions.create({
+      const stream = await getClient().chat.completions.create({
         model: MODEL,
         max_tokens: maxTokens,
         temperature: AGENT_TEMPERATURE[agentId] ?? 0.7,
+        response_format: { type: "json_object" },
+        stream: true,
         messages: [
-          { role: "system", content: `${PUBLIC_PROMPT}\n\n${briefingText}\n\n${AGENT_PERSONAS[agentId]}` },
+          { role: "system", content: `${PUBLIC_PROMPT}\n\n${briefingText}\n\n${AGENT_PERSONAS[agentId]}\n\n${JSON_SCHEMA}` },
           { role: "user",   content: payload },
         ],
-        tools: [SUBMIT_SPEECH_TOOL],
-        tool_choice: { type: "function", function: { name: "submit_speech" } },
       }, { signal: controller.signal });
+
+      let streamStarted = false;
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content || '';
+        // 首个 chunk 时立即通知前端切换发言动画（TTFT ~1s），不等完整 JSON
+        if (delta && !streamStarted) {
+          streamStarted = true;
+          emit({ type: 'speaking_start', agentId, phase });
+        }
+        fullContent += delta;
+      }
     } finally {
       clearTimeout(timer);
     }
 
-    const tc = res.choices[0]?.message?.tool_calls?.[0];
-    if (!tc) throw new Error(`[${agentId}] 未调用 submit_speech`);
-    const inp = JSON.parse(tc.function.arguments);
+    if (!fullContent) throw new Error(`[${agentId}] 空响应`);
+    let inp;
+    try { inp = JSON.parse(fullContent); }
+    catch(e) { throw new Error(`[${agentId}] JSON解析失败: ${e.message} | 原文: ${fullContent.slice(0,80)}`); }
+    if (!inp.speech) throw new Error(`[${agentId}] 响应缺少 speech 字段`);
+
     const elapsed = Date.now() - t0;
     logMonitor(blackboard, { type: "agent_done", agentId, phase, ms: elapsed });
 

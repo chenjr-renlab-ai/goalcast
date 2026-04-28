@@ -1135,6 +1135,7 @@ function doStartCouncil() {
     try { d = JSON.parse(e.data); } catch { return; }
     if      (d.type==='phase')             handlePhase(d);
     else if (d.type==='thinking')          handleThinking(d);
+    else if (d.type==='speaking_start')    setSpeaking(d.agentId);
     else if (d.type==='message')           handleMessage(d);
     else if (d.type==='summary')           handleSummary(d);
     else if (d.type==='blackboard_update') handleBlackboardUpdate(d);
