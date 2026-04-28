@@ -948,21 +948,70 @@ window.Scene3D = (() => {
       });
     }
 
-    // 眼睛
+    // 眼睛（Pixar风：眼白+彩色虹膜+瞳孔+高光）
+    const EYE_COLORS = { stat:0x4aabff, mystic:0xcc55ff, history:0xffaa22, gambler:0x00e087, psych:0x00ddcc, moderator:0xf0d060 };
+    const irisColor = EYE_COLORS[id] || 0x44aaff;
+    const eyeMeshes = [];
     [-0.1, 0.1].forEach(ex => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), mat(0x1a1a2a));
-      eye.position.set(ex, 2.22, 0.19);
-      g.add(eye);
-      // 高光
-      const hi = new THREE.Mesh(new THREE.SphereGeometry(0.010, 6, 6), mat(0xffffff));
-      hi.position.set(ex + 0.010, 2.235, 0.205);
-      g.add(hi);
+      // 眼白（略扁球体）
+      const eyeWhite = new THREE.Mesh(
+        new THREE.SphereGeometry(0.040, 12, 10),
+        new THREE.MeshStandardMaterial({ color:0xf8f8ff, roughness:0.25, metalness:0, emissive:0xf8f8ff, emissiveIntensity:0.04 })
+      );
+      eyeWhite.position.set(ex, 2.22, 0.183);
+      eyeWhite.scale.z = 0.55;
+      g.add(eyeWhite);
+      eyeMeshes.push(eyeWhite);
+
+      // 虹膜（有颜色）
+      const iris = new THREE.Mesh(
+        new THREE.CircleGeometry(0.024, 16),
+        new THREE.MeshBasicMaterial({ color: irisColor })
+      );
+      iris.position.set(ex, 2.22, 0.207);
+      g.add(iris);
+
+      // 瞳孔
+      const pupil = new THREE.Mesh(
+        new THREE.CircleGeometry(0.013, 12),
+        new THREE.MeshBasicMaterial({ color: 0x040412 })
+      );
+      pupil.position.set(ex, 2.22, 0.209);
+      g.add(pupil);
+
+      // 高光（两个，模拟真实眼神）
+      const hi1 = new THREE.Mesh(new THREE.CircleGeometry(0.007, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      hi1.position.set(ex + 0.009, 2.232, 0.210);
+      g.add(hi1);
+      const hi2 = new THREE.Mesh(new THREE.CircleGeometry(0.003, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      hi2.position.set(ex - 0.007, 2.212, 0.210);
+      g.add(hi2);
     });
 
-    // 嘴巴（小半圆，U7-C: 存入 nodes 用于动画）
-    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.048, 0.010, 5, 12, Math.PI), mat(0x8a4a3a));
-    mouth.position.set(0, 2.13, 0.20); mouth.rotation.x = -Math.PI * 0.15;
-    g.add(mouth);
+    // 眉毛（动画卡通感）
+    [-0.1, 0.1].forEach(ex => {
+      const brow = new THREE.Mesh(
+        new THREE.BoxGeometry(0.058, 0.013, 0.010),
+        mat(hairColor, 0.85, 0.05, hairColor, 0.5)
+      );
+      brow.position.set(ex, 2.268, 0.172);
+      brow.rotation.z = ex < 0 ? 0.14 : -0.14;
+      g.add(brow);
+    });
+
+    // 嘴巴（U7-C: 存入 nodes 用于动画；比 torus 更像嘴形）
+    const mouthGroup = new THREE.Group();
+    mouthGroup.position.set(0, 2.12, 0.195);
+    mouthGroup.rotation.x = -0.10;
+    g.add(mouthGroup);
+    // 嘴唇下缘弧线
+    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.009, 6, 14, Math.PI), mat(0x8a3a2e));
+    mouthGroup.add(mouth);
+    // 嘴唇上缘（略窄）
+    const lipTop = new THREE.Mesh(new THREE.TorusGeometry(0.042, 0.007, 6, 12, Math.PI), mat(0xcc6655));
+    lipTop.rotation.y = Math.PI;
+    lipTop.position.y = 0.005;
+    mouthGroup.add(lipTop);
 
     // 冰狗眼镜
     if (id === 'stat') {
@@ -1071,7 +1120,7 @@ window.Scene3D = (() => {
     const light = new THREE.PointLight(color, .5, 10);
     light.position.y = 1.5; g.add(light);
 
-    nodes[id] = { g, hex, beam, orbRing, orbRing2, sprite, light, pillar, edgeRing, angle, x, z, mouth };
+    nodes[id] = { g, hex, beam, orbRing, orbRing2, sprite, light, pillar, edgeRing, angle, x, z, mouth: mouthGroup, head, eyeMeshes };
   }
 
   // ── 各 agent 专属广播主播台 ──────────────────────────────────
@@ -1692,18 +1741,37 @@ window.Scene3D = (() => {
     // 3D 角色呼吸/发言动画
     Object.entries(nodes).forEach(([id, n]) => {
       const isSpeak = id === currentSpeakerId;
-      // U7-D: 非发言时轻微浮动（idle breathing），发言时停止以突出静止姿态
+      // U7-D: 非发言时轻微浮动（idle breathing）
       const bobY = isSpeak ? 0 : Math.sin(t * 0.8 + n.angle) * 0.02;
+      if (n.g) n.g.position.y = bobY;
+
       // 发言时躯干微微前倾
       n.g.children.forEach(child => {
         if (child.userData?.isTorso) {
           child.rotation.x = isSpeak ? Math.sin(t * 3) * 0.04 : 0;
         }
       });
-      if (n.g) n.g.position.y = bobY;
-      // U7-C: 嘴部动画——发言时张合，其余时间复位
+
+      // 头部动画：发言时点头/转头，idle 时轻微随机晃动
+      if (n.head) {
+        n.head.rotation.y = isSpeak
+          ? Math.sin(t * 2.2) * 0.09
+          : Math.sin(t * 0.35 + n.angle * 1.7) * 0.015;
+        n.head.rotation.x = isSpeak
+          ? Math.sin(t * 2.9 + 0.6) * 0.05
+          : 0;
+      }
+
+      // U7-C: 嘴部动画——发言时张合
       if (n.mouth) {
         n.mouth.scale.y = isSpeak ? 1 + Math.abs(Math.sin(t * 7)) * 1.2 : 1;
+      }
+
+      // 眨眼动画：每 4~6 秒眨一次，各 agent 错开
+      if (n.eyeMeshes) {
+        const blinkCycle = (t + n.angle * 1.3) % 5.5;
+        const blinkSY = blinkCycle > 5.1 ? Math.max(0.05, 1 - (blinkCycle - 5.1) * 12) : 1;
+        n.eyeMeshes.forEach(e => { e.scale.y = blinkSY; });
       }
     });
 

@@ -1884,81 +1884,220 @@ function copyResultSummary() {
   const m = currentMatchData;
   const verdict = document.querySelector('.verdict')?.textContent?.trim() || '';
   const score = document.querySelector('.rcs-score')?.textContent?.trim() || '';
-  const scoreParts = score.split(/\s*[–\-]\s*/);
 
+  const W = 800, H = 520;
   const canvas = document.createElement('canvas');
-  canvas.width = 640; canvas.height = 420;
+  canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  // 背景
-  ctx.fillStyle = '#010714';
-  ctx.fillRect(0, 0, 640, 420);
-  // 金边
-  ctx.strokeStyle = '#c8a832'; ctx.lineWidth = 2;
-  ctx.strokeRect(12, 12, 616, 396);
-  ctx.strokeStyle = 'rgba(200,168,50,.25)'; ctx.lineWidth = 1;
-  ctx.strokeRect(18, 18, 604, 384);
+  // ── 辅助函数 ──
+  const rr = (x, y, w, h, r) => {
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+    ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+    ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+    ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
+    ctx.closePath();
+  };
+  const CX = W / 2;
 
-  // 标题
-  ctx.fillStyle = '#c8a832';
-  ctx.font = 'bold 13px "PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('🔮  预言者议会  ·  AI 足球预测', 320, 48);
+  // ── 背景 ──
+  ctx.fillStyle = '#030c18';
+  ctx.fillRect(0, 0, W, H);
 
-  // 两队名
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 24px "PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.fillText(`${m?.home||'主队'}  vs  ${m?.away||'客队'}`, 320, 84);
+  // 场馆顶部灯光
+  const grad = ctx.createRadialGradient(CX, 0, 0, CX, 0, 380);
+  grad.addColorStop(0, 'rgba(20,60,180,0.45)');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
 
-  // 比赛信息
-  ctx.fillStyle = 'rgba(221,238,255,0.45)';
-  ctx.font = '11px "PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.fillText(m?.stage || '', 320, 105);
+  // 主场蓝光
+  const hg = ctx.createRadialGradient(80, H/2, 0, 80, H/2, 320);
+  hg.addColorStop(0, 'rgba(40,90,220,0.30)');
+  hg.addColorStop(1, 'transparent');
+  ctx.fillStyle = hg; ctx.fillRect(0, 0, W, H);
 
-  // 分割线
-  ctx.strokeStyle = 'rgba(200,168,50,.3)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(60, 118); ctx.lineTo(580, 118); ctx.stroke();
+  // 客场红光
+  const ag = ctx.createRadialGradient(W-80, H/2, 0, W-80, H/2, 320);
+  ag.addColorStop(0, 'rgba(200,30,50,0.28)');
+  ag.addColorStop(1, 'transparent');
+  ctx.fillStyle = ag; ctx.fillRect(0, 0, W, H);
 
-  // 议会比分
-  if (score) {
-    ctx.fillStyle = 'rgba(221,238,255,.4)';
-    ctx.font = '10px "PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.fillText('议 会 综 合 预 测', 320, 140);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 72px "PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.fillText(score, 320, 215);
+  // 中心金光晕
+  const cg = ctx.createRadialGradient(CX, 190, 0, CX, 190, 160);
+  cg.addColorStop(0, 'rgba(200,168,50,0.10)');
+  cg.addColorStop(1, 'transparent');
+  ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
+
+  // 草坪纹理（细横线）
+  ctx.strokeStyle = 'rgba(0,80,20,0.07)'; ctx.lineWidth = 1;
+  for (let ly = 460; ly < H; ly += 12) {
+    ctx.beginPath(); ctx.moveTo(0, ly); ctx.lineTo(W, ly); ctx.stroke();
   }
 
-  // 议会裁决
-  ctx.fillStyle = '#00d46a';
-  ctx.font = 'bold 16px "PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.fillText(verdict, 320, 250);
+  // ── 外框 ──
+  ctx.strokeStyle = '#c8a832'; ctx.lineWidth = 2.5;
+  rr(10, 10, W-20, H-20, 10); ctx.stroke();
+  ctx.strokeStyle = 'rgba(200,168,50,.22)'; ctx.lineWidth = 1;
+  rr(16, 16, W-32, H-32, 7); ctx.stroke();
 
-  // 金句（最多2条）
-  const quotes = sessionCatchphrases.slice(0, 2);
-  let qy = 278;
-  ctx.font = '12px "PingFang SC","Microsoft YaHei",sans-serif';
-  quotes.forEach(q => {
-    const text = `${q.name}：「${q.text.slice(0, 26)}${q.text.length > 26 ? '…' : ''}」`;
-    ctx.fillStyle = 'rgba(200,168,50,.85)';
-    ctx.fillText(text, 320, qy);
-    qy += 24;
+  // 角装饰（L形）
+  const cs = 22;
+  ctx.strokeStyle = '#f0d060'; ctx.lineWidth = 3;
+  [[14,14],[W-14,14],[14,H-14],[W-14,H-14]].forEach(([cx,cy]) => {
+    const sx = cx < W/2 ? 1 : -1, sy = cy < H/2 ? 1 : -1;
+    ctx.beginPath(); ctx.moveTo(cx+sx*cs, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy+sy*cs); ctx.stroke();
   });
 
-  // 用户预测
-  if (userPrediction) {
-    const labels = { home:`${m?.home}胜`, draw:'平局', away:`${m?.away}胜` };
-    ctx.fillStyle = 'rgba(221,238,255,.5)';
-    ctx.font = '11px "PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.fillText(`你的预测：${labels[userPrediction]||'?'}`, 320, qy + 10);
+  // ── 顶栏 ──
+  ctx.fillStyle = 'rgba(200,168,50,.07)';
+  rr(10, 10, W-20, 52, 10); ctx.fill();
+  ctx.strokeStyle = 'rgba(200,168,50,.25)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(30, 62); ctx.lineTo(W-30, 62); ctx.stroke();
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#f0d060';
+  ctx.font = 'bold 15px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText('🔮 预言者议会', 28, 43);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(221,238,255,.45)';
+  ctx.font = '10px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText(`AI 足球预测议会  ·  ${m?.stage || 'Premier League'}`, W-28, 43);
+
+  // ── 球队区块 ──
+  // 主场
+  ctx.fillStyle = 'rgba(30,70,200,.18)';
+  rr(24, 72, 210, 148, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(60,110,230,.3)'; ctx.lineWidth = 1; rr(24, 72, 210, 148, 8); ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#89baff';
+  ctx.font = 'bold 22px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText(m?.home || '主队', 129, 126);
+  ctx.fillStyle = 'rgba(221,238,255,.35)';
+  ctx.font = '10px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText('H O M E', 129, 146);
+
+  // 装饰线（蓝）
+  const hbg = ctx.createLinearGradient(24, 0, 234, 0);
+  hbg.addColorStop(0, 'rgba(60,110,230,.6)'); hbg.addColorStop(1, 'transparent');
+  ctx.fillStyle = hbg; ctx.fillRect(24, 72, 210, 4);
+
+  // 客场
+  ctx.fillStyle = 'rgba(200,30,50,.18)';
+  rr(W-234, 72, 210, 148, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(200,40,60,.3)'; ctx.lineWidth = 1; rr(W-234, 72, 210, 148, 8); ctx.stroke();
+
+  ctx.fillStyle = '#ff9999';
+  ctx.font = 'bold 22px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText(m?.away || '客队', W-129, 126);
+  ctx.fillStyle = 'rgba(221,238,255,.35)';
+  ctx.font = '10px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText('A W A Y', W-129, 146);
+
+  // 装饰线（红）
+  const abg = ctx.createLinearGradient(W-24, 0, W-234, 0);
+  abg.addColorStop(0, 'rgba(200,40,60,.6)'); abg.addColorStop(1, 'transparent');
+  ctx.fillStyle = abg; ctx.fillRect(W-234, 72, 210, 4);
+
+  // ── 中间：比分 / VS ──
+  ctx.fillStyle = 'rgba(200,168,50,.07)';
+  rr(CX-120, 70, 240, 150, 10); ctx.fill();
+  ctx.strokeStyle = 'rgba(200,168,50,.28)'; ctx.lineWidth = 1; rr(CX-120, 70, 240, 150, 10); ctx.stroke();
+
+  ctx.fillStyle = 'rgba(221,238,255,.32)';
+  ctx.font = '9px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText('议 会 综 合 预 测', CX, 94);
+
+  if (score) {
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 72px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText(score, CX, 167);
+  } else {
+    ctx.fillStyle = 'rgba(200,168,50,.85)';
+    ctx.font = 'bold 42px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText('VS', CX, 162);
   }
 
-  // 底部来源
-  ctx.fillStyle = 'rgba(255,255,255,.2)';
-  ctx.font = '10px "PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.fillText('via  Goalcast AI 预测议会  ·  goalcast.ai', 320, 400);
+  // ── 裁决横幅 ──
+  if (verdict) {
+    const cleanVerdict = verdict.replace(/^🏆\s*议会裁决[：:]\s*/, '');
+    ctx.fillStyle = 'rgba(0,200,100,.12)';
+    rr(CX-195, 230, 390, 36, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,200,100,.35)'; ctx.lineWidth = 1; rr(CX-195, 230, 390, 36, 6); ctx.stroke();
 
-  // 复制到剪贴板
+    ctx.fillStyle = '#00d46a';
+    ctx.font = 'bold 15px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText(`⚖️ 议会裁决：${cleanVerdict}`, CX, 253);
+  }
+
+  // ── 分割线 ──
+  ctx.strokeStyle = 'rgba(200,168,50,.18)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(36, 282); ctx.lineTo(W-36, 282); ctx.stroke();
+
+  // ── 金句 ──
+  const quotes = sessionCatchphrases.slice(0, 3);
+  let qy = 308;
+  ctx.save();
+  ctx.rect(36, 282, W-72, 160); ctx.clip();
+  quotes.forEach((q, i) => {
+    const color = q.cssColor || '#c8a832';
+    // 彩色竖条
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.75;
+    ctx.fillRect(36, qy - 13, 3, 16);
+    ctx.globalAlpha = 1;
+
+    // agent 名
+    ctx.textAlign = 'left';
+    ctx.fillStyle = color;
+    ctx.font = `bold 10px "PingFang SC","Microsoft YaHei",sans-serif`;
+    ctx.fillText(q.name || q.agentId, 46, qy);
+
+    // 引言
+    ctx.fillStyle = 'rgba(221,238,255,.78)';
+    ctx.font = `11px "PingFang SC","Microsoft YaHei",sans-serif`;
+    const qtext = `「${q.text.slice(0,40)}${q.text.length>40?'…':''}」`;
+    ctx.fillText(qtext, 130, qy);
+    qy += 30;
+  });
+  ctx.restore();
+
+  // ── 用户预测 ──
+  if (userPrediction && qy < H - 60) {
+    const labels = { home:`${m?.home}胜`, draw:'平局', away:`${m?.away}胜` };
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(221,238,255,.45)';
+    ctx.font = '10px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText(`我的预测：${labels[userPrediction]||'?'}`, W-36, H-46);
+  }
+
+  // ── 底栏 ──
+  ctx.fillStyle = 'rgba(200,168,50,.06)';
+  rr(10, H-38, W-20, 28, 0); ctx.fill();
+  ctx.strokeStyle = 'rgba(200,168,50,.15)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(30, H-38); ctx.lineTo(W-30, H-38); ctx.stroke();
+
+  // 底部装饰点
+  for (let dx = CX-80; dx <= CX+80; dx += 20) {
+    ctx.fillStyle = 'rgba(200,168,50,.4)';
+    ctx.beginPath(); ctx.arc(dx, H-38, 1.5, 0, Math.PI*2); ctx.fill();
+  }
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,.22)';
+  ctx.font = '10px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText('Goalcast AI  ·  Oracle Council Predictor  ·  goalcast.ai', CX, H-18);
+
+  // 右下小图标
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(200,168,50,.6)';
+  ctx.font = '16px serif';
+  ctx.fillText('🔮', W-28, H-18);
+
+  // ── 复制 ──
   canvas.toBlob(blob => {
     if (!blob) { showToast('生成图片失败'); return; }
     if (navigator.clipboard?.write) {
@@ -2007,6 +2146,12 @@ async function submitActualResultInline() {
       fetchAccuracyProfiles();
     }
   } catch(e) { showToast('录入失败，请重试'); }
+}
+
+function toggleChangelog() {
+  const m = document.getElementById('changelogModal');
+  if (!m) return;
+  m.style.display = m.style.display === 'none' ? 'flex' : 'none';
 }
 
 function showToast(msg) {

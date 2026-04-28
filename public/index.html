@@ -40,8 +40,53 @@
       <div class="phase-step" data-phase="vote">终投</div>
     </div>
     <div class="live-badge" id="liveBadge"><div class="live-dot"></div>LIVE</div>
+    <button class="version-badge" onclick="toggleChangelog()">v4.6</button>
   </div>
 </header>
+
+<!-- ── Changelog Modal ── -->
+<div id="changelogModal" class="changelog-modal" style="display:none" onclick="if(event.target===this)toggleChangelog()">
+  <div class="cl-inner">
+    <div class="cl-head">
+      <span>📋 版本更新记录</span>
+      <button onclick="toggleChangelog()">✕</button>
+    </div>
+    <div class="cl-body">
+      <div class="cl-ver">v4.6 <span class="cl-date">2026-04-28</span></div>
+      <ul>
+        <li>Agent 3D 形象重绘：Pixar 风虹膜+瞳孔+眉毛，眨眼动画</li>
+        <li>发言时头部点头/晃动，嘴唇双层设计</li>
+        <li>月影姐月亮发饰、老球迷围巾道具</li>
+        <li>体型比例优化（躯干加高、头部缩小）</li>
+        <li>FPL 数据降级提示；Evidence board 上移</li>
+      </ul>
+      <div class="cl-ver">v4.5 <span class="cl-date">2026-04-25</span></div>
+      <ul>
+        <li>引导窗口 v3 版本号 + ❓重看按钮</li>
+        <li>焦点 banner 议会中自动隐藏</li>
+        <li>历史记录去除夹层重复条</li>
+        <li>终投计数改为中文队名显示</li>
+        <li>分享战报生成可粘贴 PNG 图片</li>
+        <li>Stance / Devil Reveal 改为中文队名</li>
+      </ul>
+      <div class="cl-ver">v4.4 <span class="cl-date">2026-04-22</span></div>
+      <ul>
+        <li>精准度徽章（近5场命中率）</li>
+        <li>拔河绳 SVG 概率条（弹跳+发光+数值闪烁）</li>
+        <li>焦点赛事 banner + 分阶段隐藏</li>
+        <li>剧情分镜卡片（sc-card）</li>
+        <li>Agent 方法来源标签</li>
+      </ul>
+      <div class="cl-ver">v4.0 <span class="cl-date">2026-04-18</span></div>
+      <ul>
+        <li>FPL API 接入（xG/伤情/球员状态）</li>
+        <li>Hero 卡壁挂小面板</li>
+        <li>3D 议会大厅（Three.js humanoid）</li>
+        <li>Agent 专属 3D 道具（眼镜/耳机/麦克风/扑克）</li>
+      </ul>
+    </div>
+  </div>
+</div>
 
 <!-- ── Probability Bar (拔河绳) ── -->
 <div class="prob-bar-wrap" id="probBarWrap">

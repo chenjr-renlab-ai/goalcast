@@ -1705,13 +1705,29 @@ body.session-active .prob-bar-wrap {
 
 /* D: 今日焦点战横幅 */
 .featured-banner {
-  background:linear-gradient(90deg, rgba(200,168,50,.18), rgba(0,200,80,.1));
-  border:1px solid var(--border-gold); border-radius:6px;
-  padding:6px 12px; font-size:12px; font-weight:700;
-  color:var(--gold-bright); cursor:pointer; margin-bottom:6px;
-  letter-spacing:.3px; transition:background .2s; line-height:1.4;
+  background: linear-gradient(135deg, rgba(200,168,50,.22), rgba(0,160,60,.14));
+  border: 1px solid rgba(200,168,50,.5); border-radius: 8px;
+  padding: 8px 14px; font-size: 12px; font-weight: 700;
+  color: var(--gold-bright); cursor: pointer;
+  letter-spacing: .3px; line-height: 1.5;
+  transition: background .2s, box-shadow .2s;
+  box-shadow: 0 4px 18px rgba(200,168,50,.22), 0 2px 6px rgba(0,0,0,.5);
 }
-.featured-banner:hover { background:linear-gradient(90deg, rgba(200,168,50,.28), rgba(0,200,80,.18)); }
+.featured-banner:hover {
+  background: linear-gradient(135deg, rgba(200,168,50,.32), rgba(0,200,80,.20));
+  box-shadow: 0 6px 24px rgba(200,168,50,.35), 0 2px 8px rgba(0,0,0,.6);
+}
+/* 非会议中：featured banner 浮在左下角，遮内容不遮 LIVE 条 */
+body:not(.session-active) #featuredMatchBanner[style*="block"],
+body:not(.session-active) #featuredMatchBanner:not([style*="none"]) {
+  position: fixed; bottom: 164px; left: 8px; z-index: 200;
+  max-width: 222px;
+  animation: bannerFloat 3.5s ease-in-out infinite;
+}
+@keyframes bannerFloat {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-5px); }
+}
 
 /* E: 结果页 CTA 按钮区 */
 .results-cta-row { display:flex; gap:8px; margin-top:14px; }
@@ -1867,3 +1883,55 @@ body.session-active .history-feed { max-height:56px; }
 .cta-share-img { background:linear-gradient(90deg,rgba(200,168,50,.2),rgba(200,168,50,.1)); color:var(--gold-bright); border-color:var(--border-gold); }
 .cta-share-img:hover { background:linear-gradient(90deg,rgba(200,168,50,.32),rgba(200,168,50,.18)); }
 .fpl-unavailable { font-size:10px; color:rgba(251,191,36,.7); background:rgba(251,191,36,.07); border:1px solid rgba(251,191,36,.2); border-radius:4px; padding:4px 8px; margin-bottom:6px; }
+
+/* ── version badge ── */
+.version-badge {
+  background: rgba(200,168,50,.12); border: 1px solid rgba(200,168,50,.35);
+  border-radius: 4px; color: var(--gold); font-size: 10px; font-weight: 700;
+  padding: 2px 6px; cursor: pointer; letter-spacing: .5px;
+  transition: background .2s;
+}
+.version-badge:hover { background: rgba(200,168,50,.22); }
+
+/* ── changelog modal ── */
+.changelog-modal {
+  position: fixed; inset: 0; z-index: 900;
+  background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+}
+.cl-inner {
+  background: linear-gradient(160deg, #050f12 0%, #030a0f 100%);
+  border: 1px solid rgba(200,168,50,.35); border-radius: 12px;
+  width: min(420px, 92vw); max-height: 80vh; overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,.8), 0 0 40px rgba(200,168,50,.08);
+}
+.cl-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 18px; border-bottom: 1px solid rgba(200,168,50,.2);
+  font-weight: 700; font-size: 14px; color: var(--gold-bright);
+  background: rgba(200,168,50,.06);
+}
+.cl-head button {
+  background: none; border: 1px solid rgba(255,255,255,.2); border-radius: 4px;
+  color: var(--text-sub); cursor: pointer; width: 24px; height: 24px;
+  font-size: 12px; transition: all .15s;
+}
+.cl-head button:hover { background: rgba(255,255,255,.1); color: #fff; }
+.cl-body {
+  overflow-y: auto; padding: 16px 18px; flex: 1;
+  scrollbar-width: thin; scrollbar-color: rgba(200,168,50,.3) transparent;
+}
+.cl-ver {
+  font-size: 13px; font-weight: 800; color: var(--gold-bright);
+  margin: 12px 0 6px; padding-bottom: 4px;
+  border-bottom: 1px solid rgba(200,168,50,.2);
+}
+.cl-ver:first-child { margin-top: 0; }
+.cl-date { font-size: 10px; font-weight: 400; color: var(--text-sub); margin-left: 8px; }
+.cl-body ul { padding-left: 14px; }
+.cl-body li {
+  font-size: 11px; color: rgba(221,238,255,.75); line-height: 1.8;
+  border-bottom: none;
+}
+.cl-body li::marker { color: var(--gold); }
