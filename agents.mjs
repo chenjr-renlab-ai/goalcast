@@ -692,125 +692,86 @@ export async function runCouncil(matchData, emit, options = {}) {
   emit({ type: "phase", phase: "initial" });
   const initialMsgs = [];
 
-  EXPERTS.forEach(id => emit({ type: "thinking", agentId: id }));
-  const parallelResults = await Promise.allSettled(
-    EXPERTS.map(async (id, idx) => {
-      // 错开 150ms/agent（DeepSeek 限速宽松，保留小间隔即可）
-      await sleep(idx * 150);
-      const isDevil = id === blackboard.devilAdvocate;
-      const briefingOverride = isDevil ? buildDevilBriefing(match, id) : null;
-      const seed = match.agentSeeds?.[id] ?? "";
-      logMonitor(blackboard, { type: "agent_start", agentId: id, phase: "initial" });
-      // 把该 agent 的真实数据值直接注入 directive（禁止编造）
-      const dataLines = extractAgentDataValues(match, id);
-      const dataBlock = dataLines.length > 0
-        ? `\n【你手头的真实数据——只能引用这些数字，禁止编造其他数字】\n${dataLines.join('\n')}\n`
-        : '\n【注意：当前数据字段为空，禁止编造数字，改用感性判断代替定量分析】\n';
-
-      const AGENT_DIRECTIVE = {
-        stat: `【你是Dr.冰狗——AI Poisson 模拟引擎】${dataBlock}
+  // 完全串行：每个 agent 独立运行，完成后立即 emit，不依赖并发
+  // 避免并发触发速率限制 + 消除 Promise.allSettled 整体阻塞
+  const AGENT_DIRECTIVE = {
+    stat: (dataBlock) => `【你是Dr.冰狗——AI Poisson 模拟引擎】${dataBlock}
 你已完成10,000次蒙特卡洛模拟。现在报告结果（在脑中推导，不要输出步骤）：
 ① 用上面进失球数据估算两队 Poisson 参数（λ主=场均进球，λ客=场均进球）
 ② 若主队近期连胜超过3场，启动均值回归判断：是否正在超水平发挥、即将向均值回归
 ③ 输出模拟结果：P(主胜)=X% P(平)=Y% P(客胜)=Z%，必须三个数字都给出
+输出规则：speech必须含三个百分比"主胜X%/平Y%/客Z%"；开头用"绷不住了"/"样本量说话"；catchphrase含具体概率数字`,
 
-输出规则：
-- speech 必须包含三个百分比，格式"主胜X%/平Y%/客Z%"
-- 如果认为热门在超水平运行，要明确说"均值回归信号已触发，我押[平/冷门]"
-- 开头用"绷不住了"/"模拟结果很清楚"/"样本量说话"
-- catchphrase 必须含具体概率数字`,
+    gambler: (dataBlock) => `【你是赌狗本狗——AI 跨平台盘口套利系统】${dataBlock}
+你已监测多家博彩公司赔率变动。现在分析（在脑中推导，不要输出步骤）：
+① 从赔率判断"公众盘方向"（哪边赔率被压低 = 公众在押那边）
+② 从盘口动态判断"职业盘信号"（有无异常移动、资金流向）
+③ 关键：公众盘和职业盘方向是否一致？若相反，职业盘是正确答案
+输出规则：必须说"公众在押X，职业盘信号指向Y"；用"钱不说谎"/"盘口说话"；引用具体赔率数字`,
 
-        gambler: `【你是赌狗本狗——AI 跨平台盘口套利系统】${dataBlock}
-你已监测了多家博彩公司的赔率变动。现在分析（在脑中推导，不要输出步骤）：
-① 从赔率数据判断"公众盘方向"（哪边赔率被压低 = 公众在押那边）
-② 从盘口动态/隐含比分判断"职业盘信号"（有没有异常移动、资金流向）
-③ 关键判断：公众盘和职业盘方向是否一致？若相反，职业盘是正确答案
+    history: (dataBlock) => `【你是老球迷——AI 历史情景向量匹配引擎】${dataBlock}
+你已扫描历史数据库，找到最相似历史局面。现在报告（在脑中推导，不要输出步骤）：
+① 最高相似度的历史情景（年份+对阵+关键相似点）
+② 那类情景下的结果分布（X场里Y场主赢/平/客赢）
+③ 主动给出反例——历史上相似局面但结果相反的案例
+输出规则：必须给出具体历史比赛（年份+双方）；必须承认反例；开头用"诸位可能太年轻"/"那年我亲眼所见"`,
 
-输出规则：
-- 必须明确说出"公众在押X，职业盘信号指向Y"（或"两者同向，市场共识是Z"）
-- 给出被"错误定价"的一边，说明理由
-- 用"钱不说谎"/"盘口说话"，引用具体赔率数字`,
+    psych: (dataBlock) => `【你是碎碎念——AI 行为语言分析引擎】${dataBlock}
+你已分析两队球员近期采访文本和行为模式。现在报告（在脑中推导，不要输出步骤）：
+① 找出一个关键球员，他最近的可观察信号（采访情绪/换人时机/伤病模式）
+② 这个信号的历史含义：该类信号出现后球员发挥的规律
+③ 推导：这个心理状态如何具体影响本场得失球，给出比分结论
+输出规则：必须点名具体球员；给出信号来源；推导到具体比分；开头用"我注意到一个细节"/"更衣室里有什么我知道"`,
 
-        history: `【你是老球迷——AI 历史情景向量匹配引擎】${dataBlock}
-你已扫描历史数据库，找到了与今天情况最相似的历史局面。现在报告（在脑中推导，不要输出步骤）：
-① 最高相似度的历史情景是什么（年份+对阵+关键相似点）
-② 那场比赛或那类情景下，结果分布是怎样的（X场里Y场主赢/平/客赢）
-③ 关键：主动给出反例——历史上相似局面里结果相反的案例，说明它和今天有什么不同
+    mystic: (dataBlock) => `【你是月影姐——AI 社交舆情分析引擎（玄学是表演包装）】${dataBlock}
+你已处理近48小时本场相关社交内容，得出叙事强度分析。现在报告（在脑中推导，不要输出步骤）：
+① 当前最强"公众叙事"是什么？媒体和舆论支持谁、叙事强度如何？
+② 这个叙事的脆弱点：依赖的哪个假设最容易崩塌？
+③ 你是顺叙事还是反叙事？注意：若"爆冷"已成主流叙事，反而要支持热门
+输出规则：必须说"当前主流叙事是X，脆弱点是Y"；不能每次都押冷门；开头用"说真的姐妹们"/"天机不可泄露"`,
+  };
 
-输出规则：
-- 必须给出具体历史比赛（年份+双方），不能只说"历史上常见"
-- 必须承认反例："但历史上也有X次相似局面结果相反"，然后说明差异
-- 如果历史库里没有好的参照，就说"样本太少，我只能靠大比赛直觉"
-- 开头用"诸位可能太年轻"/"历史数据库显示"/"那年我亲眼所见"`,
+  for (const id of EXPERTS) {
+    emit({ type: "thinking", agentId: id });
+    const isDevil = id === blackboard.devilAdvocate;
+    const briefingOverride = isDevil ? buildDevilBriefing(match, id) : null;
+    const seed = match.agentSeeds?.[id] ?? "";
+    logMonitor(blackboard, { type: "agent_start", agentId: id, phase: "initial" });
 
-        psych: `【你是碎碎念——AI 行为语言分析引擎】${dataBlock}
-你已分析了两队球员近期采访文本和行为模式。现在报告（在脑中推导，不要输出步骤）：
-① 找出一个关键球员，他最近的可观察信号是什么（采访情绪/换人时机/伤病模式）
-② 这个信号的历史含义：这类信号出现后，该球员（或类似球员）接下来的发挥有什么规律
-③ 推导：这个心理状态如何具体影响这场比赛的得失球，给出比分结论
+    const dataLines = extractAgentDataValues(match, id);
+    const dataBlock = dataLines.length > 0
+      ? `\n【真实数据——只能引用这些数字，禁止编造】\n${dataLines.join('\n')}\n`
+      : '\n【无数据，禁止编造数字，改用感性判断】\n';
 
-输出规则：
-- 必须点名一个具体球员（名字），不能只说"主队整体状态"
-- 必须给出信号来源（"根据X的采访/近期换人时机/伤病模式"）
-- 推导到具体比分，不能只说"可能影响发挥"
-- 开头用"我注意到一个细节"/"采访分析显示"/"更衣室里有什么我知道"`,
+    const directive = `给出初判。独家视角（赛前情报）：${seed}
 
-        mystic: `【你是月影姐——AI 社交舆情分析引擎（玄学是你的表演包装）】${dataBlock}
-你已处理了近48小时内关于本场的大量社交内容，得出叙事强度分析。现在报告（在脑中推导，不要输出步骤）：
-① 当前最强的"公众叙事"是什么？媒体和舆论在支持谁、为什么？叙事强度如何？
-② 这个叙事的脆弱点：它依赖的哪个假设最容易崩塌？
-③ 关键决策：你是顺叙事（叙事正确）还是反叙事（叙事已过热）？
-   特别注意：如果"爆冷"本身已经成为主流叙事，你反而要支持热门——这是你最有价值的判断
+${(AGENT_DIRECTIVE[id] || (() => ''))(dataBlock)}
 
-输出规则：
-- 必须说出"当前主流叙事是X，它的脆弱点是Y"
-- 不能每次都押冷门——当冷门预测本身成为舆论主流，支持热门才是反叙事
-- 玄学语言是包装，内核是舆情分析
-- 开头用"说真的姐妹们"/"天机不可泄露但我还是说了"`,
-      };
-      const agentConstraint = AGENT_DIRECTIVE[id] || '';
-      const directive = `给出初判。你的独家视角（来自赛前情报分析）：${seed}
-
-${agentConstraint}
-
-必须填 structured 字段（winner + score数组[主,客] + confidence + keyFactor）。
+必须填 structured（winner + score数组[主,客] + confidence + keyFactor）。
 必须写 scenePrediction（决定性时刻分镜：分钟数+球员名+具体动作，30-50字）。
-必须写 catchphrase（今晚最可能被截图的那句话，含具体数字，20字以内）。
+必须写 catchphrase（今晚最可能被截图那句话，含具体数字，20字以内）。
 speech 50-80字，弹幕语气，必须引用至少一个上面给出的真实数据点。`;
-      // 失败最多重试1次（间隔4s），处理 Moonshot 偶发限速/超时
-      const msg = await withRetry(
-        () => callAgent(id, directive, "initial", briefingOverride),
-        { retries: 1, baseDelay: 4000 }
-      );
-      return msg;
-    })
-  );
 
-  for (let i = 0; i < parallelResults.length; i++) {
-    const r = parallelResults[i];
-    if (r.status === 'rejected') {
-      const err = r.reason;
-      const errDetail = [err?.message, err?.status ? `HTTP ${err.status}` : '', err?.code || ''].filter(Boolean).join(' | ');
-      logMonitor(blackboard, { type: "error", agentId: EXPERTS[i], phase: "initial", msg: errDetail });
-      // 发一条占位发言，让前端继续推进而不是卡死
-      const fallback = {
-        id: nextId(), agentId: EXPERTS[i], phase: "initial",
-        speech: `（${AGENT_NAMES[EXPERTS[i]] || EXPERTS[i]}信号丢失，本轮跳过分析）`,
+    let msg;
+    try {
+      msg = await withRetry(
+        () => callAgent(id, directive, "initial", briefingOverride),
+        { retries: 1, baseDelay: 3000 }
+      );
+    } catch (err) {
+      const errDetail = [err?.message, err?.status ? `HTTP ${err.status}` : ''].filter(Boolean).join(' | ');
+      logMonitor(blackboard, { type: "error", agentId: id, phase: "initial", msg: errDetail });
+      msg = {
+        id: nextId(), agentId: id, phase: "initial",
+        speech: `（${AGENT_NAMES[id] || id}信号丢失，本轮跳过分析）`,
         catchphrase: '', emotion: 'calm', references: [],
         structured: null, scenePrediction: null, predictionTag: null,
       };
-      addMsg(fallback);
-      initialMsgs.push(fallback);
-      continue;
     }
-    const msg = r.value;
+
     addMsg(msg);
     maybeAddInsight(msg);
     initialMsgs.push(msg);
-    // DeepSeek ~2-3s 返回，节奏从 7-15s/条 → 2.5-4.5s/条
-    const totalLen = (msg.speech?.length ?? 0) + (msg.catchphrase?.length ?? 0) + (msg.scenePrediction?.length ?? 0) * 0.6;
-    const readDelay = Math.max(2500, Math.min(4500, totalLen * 18 + 1000));
-    await new Promise(res => setTimeout(res, readDelay));
   }
 
   // ── 初判 reaction：双向方法论互怼 ──────────────────────────────
