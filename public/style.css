@@ -1781,3 +1781,65 @@ body {
   .agent-col { width:160px !important; }
   #threeCanvas { max-width:400px !important; }
 }
+
+/* ============================================================
+   v4.5 新增样式
+   ============================================================ */
+
+/* U3: 历史记录折叠区 */
+.hf-collapse {
+  background: rgba(1,7,20,.95); border-top:1px solid var(--border);
+  flex-shrink:0; z-index:25;
+}
+.hf-toggle {
+  display:flex; align-items:center; gap:6px;
+  font-size:11px; color:var(--text-dim); padding:5px 14px;
+  cursor:pointer; user-select:none;
+}
+.hf-toggle:hover { color:var(--text-sub); background:rgba(255,255,255,.02); }
+.hf-count { background:rgba(200,168,50,.2); color:var(--gold-bright); font-size:10px; font-weight:700; padding:1px 5px; border-radius:8px; }
+.hf-arrow { margin-left:auto; font-size:9px; color:var(--text-dim); }
+.hf-inner {
+  max-height:100px; overflow-y:auto; padding:0 8px 6px;
+  scrollbar-width:none;
+}
+.hf-inner::-webkit-scrollbar { display:none; }
+/* 控制条高度压缩（去掉 history-feed 后） */
+.control-strip { height:54px !important; overflow:visible; }
+
+/* U5: 终投实时计数器 */
+.vote-tally {
+  display:flex; align-items:center; justify-content:center; gap:20px;
+  padding:7px 16px; background:rgba(200,168,50,.07);
+  border-top:1px solid var(--border-gold); border-bottom:1px solid var(--border-gold);
+  flex-shrink:0; z-index:26;
+}
+.vt-label { font-size:10px; color:var(--text-dim); letter-spacing:2px; margin-right:8px; }
+.vt-item { font-size:15px; font-weight:900; transition:all .3s; }
+.vt-home { color:#60a5fa; }
+.vt-draw { color:var(--gold-bright); }
+.vt-away { color:#f87171; }
+
+/* U6: 分镜卡片 */
+.sc-cards { display:flex; flex-direction:column; gap:8px; }
+.sc-card {
+  border-left:3px solid var(--sc-color, #60a5fa);
+  border-radius:0 6px 6px 0;
+  background:linear-gradient(90deg, color-mix(in srgb, var(--sc-color) 8%, transparent) 0%, transparent 60%);
+  padding:8px 10px; overflow:hidden;
+  transition:background .2s;
+}
+.sc-card:hover { background:linear-gradient(90deg, color-mix(in srgb, var(--sc-color) 14%, transparent) 0%, transparent 60%); }
+.sc-card-header { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.sc-card-icon { font-size:16px; }
+.sc-card-name { font-size:12px; font-weight:800; }
+.sc-card-method { font-size:9px; color:var(--text-dim); margin-left:auto; }
+.sc-card-scene {
+  font-size:12px; color:var(--text-sub); line-height:1.55;
+  font-style:italic; border-top:1px solid rgba(255,255,255,.06);
+  padding-top:5px; margin-top:2px;
+}
+
+/* 金句墙横向滚动优化 */
+.cw-scroll { display:flex; flex-direction:column; gap:5px; }
+.cw-text { font-style:italic; }

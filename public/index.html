@@ -195,10 +195,28 @@
       <button class="start-btn" id="startBtn" onclick="startCouncil()">⚡ 召开议会</button>
       <button class="info-toggle" id="infoToggle" onclick="toggleMatchDrawer()" title="比赛详情">📋</button>
       <a class="info-toggle" href="/monitor.html" target="_blank" title="监控面板">📊</a>
+      <button class="info-toggle" onclick="showOnboarding()" title="什么是议会？">❓</button>
     </div>
     <div id="seedsStatus"></div>
   </div>
-  <div class="history-feed" id="feed"></div>
+</div>
+
+<!-- U5: 终投实时计数器 -->
+<div id="voteTally" class="vote-tally" style="display:none">
+  <span class="vt-label">终 投 计 数</span>
+  <span id="vtHome" class="vt-item vt-home">🏠 0票</span>
+  <span id="vtDraw" class="vt-item vt-draw">⚖️ 0票</span>
+  <span id="vtAway" class="vt-item vt-away">✈️ 0票</span>
+</div>
+
+<!-- U3: 历史记录移到 broadcast 下方，折叠式，不占主区域夹层 -->
+<div id="historyFeedCollapse" class="hf-collapse" style="display:none">
+  <div class="hf-toggle" onclick="toggleHistoryFeed()">
+    <span>📜 对话历史</span>
+    <span id="hfCount" class="hf-count">0</span>条
+    <span class="hf-arrow" id="hfArrow">▲</span>
+  </div>
+  <div id="feed" class="hf-inner history-feed" style="display:none"></div>
 </div>
 
 <!-- Feature 5: Live Ticker — 固定在页面最底部 -->
@@ -317,8 +335,8 @@
         <div class="onb-desc">冰狗用Poisson概率，赌狗看盘口资金，碎碎念分析采访文本——方法不同，你来判断谁更可信</div>
       </div>
     </div>
-    <button id="onbStart" class="onb-btn" onclick="localStorage.setItem('oracle_visited','1');this.closest('.onb-overlay').style.display='none'">开始观战 →</button>
-    <div class="onb-skip" onclick="localStorage.setItem('oracle_visited','1');this.closest('.onb-overlay').style.display='none'">我已了解，跳过</div>
+    <button id="onbStart" class="onb-btn" onclick="localStorage.setItem('oracle_visited_v2','1');this.closest('.onb-overlay').style.display='none'">开始观战 →</button>
+    <div class="onb-skip" onclick="localStorage.setItem('oracle_visited_v2','1');this.closest('.onb-overlay').style.display='none'">我已了解，跳过</div>
   </div>
 </div>
 

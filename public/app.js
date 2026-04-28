@@ -377,11 +377,31 @@ async function init() {
     if (document.hidden && currentEs) { currentEs.close(); currentEs = null; }
   });
 
-  // Onboarding: 首次访问弹窗
-  if (!localStorage.getItem('oracle_visited')) {
+  // U1: Onboarding — 版本号机制，大改动时递增版本使其再次弹出
+  const ONBOARDING_VER = 'oracle_visited_v2';
+  if (!localStorage.getItem(ONBOARDING_VER)) {
     const ol = document.getElementById('onboardingOverlay');
     if (ol) ol.style.display = 'flex';
   }
+}
+
+function showOnboarding() {
+  const ol = document.getElementById('onboardingOverlay');
+  if (ol) ol.style.display = 'flex';
+}
+
+// U3: 历史记录折叠/展开
+function toggleHistoryFeed() {
+  const f = document.getElementById('feed');
+  const arrow = document.getElementById('hfArrow');
+  if (!f) return;
+  const isOpen = f.style.display !== 'none';
+  f.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.textContent = isOpen ? '▲' : '▼';
+}
+function updateHistoryCount() {
+  const c = document.getElementById('hfCount');
+  if (c) c.textContent = document.querySelectorAll('#feed .history-item').length;
 }
 
 // ── Agent column cards ────────────────────────────────────
@@ -1062,6 +1082,8 @@ function startCouncil() {
   if (!matchId || !currentMatchData) return;
   document.getElementById('startBtn').disabled = true;
   document.getElementById('matchSel').disabled = true;
+  // U2: 议会开始时隐藏焦点banner
+  document.getElementById('featuredMatchBanner')?.style.setProperty('display', 'none');
   showScoreModal();
 }
 
@@ -1070,6 +1092,10 @@ function doStartCouncil() {
   document.getElementById('feed').innerHTML      = '';
   document.getElementById('resultsContainer').innerHTML = '';
   document.getElementById('liveBadge').classList.add('active');
+  // U3: 显示历史折叠区
+  const _hfc = document.getElementById('historyFeedCollapse');
+  if (_hfc) { _hfc.style.display = 'block'; }
+  updateHistoryCount();
   document.getElementById('matchDrawer')?.classList.remove('open');
   document.querySelectorAll('.phase-step').forEach(s => s.classList.remove('active','done'));
   // clear stance / consensus panels
@@ -1387,10 +1413,8 @@ function renderConsensus(level, container) {
 }
 
 function handleMessage(data) {
-  // Only switch 3D/card speaking state for non-reaction phases
-  if (data.phase !== 'reaction') {
-    setSpeaking(data.agentId, false);
-  }
+  // U4: 所有 phase 都更新 3D 高亮，确保发言者与议事厅角色始终对应
+  setSpeaking(data.agentId, false);
   // Update split screen if active
   if (splitScreenActive && (data.agentId === ssAgentA || data.agentId === ssAgentB)) {
     updateSplitScreenStance(data.agentId);
@@ -1427,6 +1451,19 @@ function handleMessage(data) {
     const rawConf = data.structured.confidence;
     const normConf = rawConf > 1 ? rawConf / 100 : (rawConf || 0.5);
     updateAgentStanceDisplay(data.agentId, data.structured.winner, normConf);
+  }
+
+  // U5: 终投阶段显示实时投票计数
+  if (data.phase === 'vote' && data.structured?.winner) {
+    const tally = document.getElementById('voteTally');
+    if (tally) {
+      tally.style.display = 'flex';
+      const votes = { home:0, draw:0, away:0 };
+      Object.values(agentsVoted).forEach(v => { if (v) votes[v] = (votes[v]||0) + 1; });
+      document.getElementById('vtHome').textContent = `🏠 ${votes.home}票`;
+      document.getElementById('vtDraw').textContent = `⚖️ ${votes.draw}票`;
+      document.getElementById('vtAway').textContent = `✈️ ${votes.away}票`;
+    }
   }
 }
 
@@ -1520,6 +1557,7 @@ function addHistoryItem(data, agent) {
   el.innerHTML = `<span class="hi-icon">${agent.icon}</span><span class="hi-name" style="color:${agent.cssColor}">${agent.name}</span><span class="hi-text">${escapeHtml(speechText)}</span>`;
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
+  updateHistoryCount();
 }
 
 function appendPhaseBanner(phase, meta) {
@@ -1663,27 +1701,35 @@ function handleSummary({ results, match, evHome, evDraw, evAway }) {
     }
     const predTimelineHtml = buildPredictionTimeline();
 
-    const scHtml = sessionScenes.length?`
+    // U6: 分镜卡片重设计 — 电影感卡片而非纯文字
+    const scHtml = sessionScenes.length ? `
       <div class="scene-compare">
-        <div class="sc-title">🎬 五种剧本对比</div>
-        <div class="sc-grid">
-          ${sessionScenes.map(sc=>`
-            <div class="sc-item" style="--agent-color:${sc.color};border-left-color:${sc.cssColor}">
-              <div class="sc-agent">${sc.name}</div>
-              <div class="sc-text">${escapeHtml(sc.text)}</div>
+        <div class="sc-title">🎬 五种结局剧本</div>
+        <div class="sc-cards">
+          ${sessionScenes.map(sc => `
+            <div class="sc-card" style="--sc-color:${sc.cssColor}">
+              <div class="sc-card-header">
+                <span class="sc-card-icon">${AGENTS[sc.agentId]?.icon || '?'}</span>
+                <span class="sc-card-name" style="color:${sc.cssColor}">${escapeHtml(sc.name)}</span>
+                <span class="sc-card-method">${escapeHtml(AGENT_METHOD_LABEL[sc.agentId] || '')}</span>
+              </div>
+              <div class="sc-card-scene">${escapeHtml(sc.text)}</div>
             </div>`).join('')}
         </div>
-      </div>`:'';
+      </div>` : '';
 
-    const cwHtml = sessionCatchphrases.length?`
+    // 金句墙
+    const cwHtml = sessionCatchphrases.length ? `
       <div class="catchphrase-wall">
         <div class="cw-title">🔥 今晚金句</div>
-        ${sessionCatchphrases.map(cp=>`
-          <div class="cw-item" style="--agent-color:${cp.color};border-left-color:${cp.cssColor}">
-            <span class="cw-agent">${cp.name}</span>
-            <span>${escapeHtml(cp.text)}</span>
-          </div>`).join('')}
-      </div>`:'';
+        <div class="cw-scroll">
+          ${sessionCatchphrases.map(cp => `
+            <div class="cw-item" style="--agent-color:${cp.color};border-left-color:${cp.cssColor}">
+              <span class="cw-agent">${cp.name}</span>
+              <span class="cw-text">${escapeHtml(cp.text)}</span>
+            </div>`).join('')}
+        </div>
+      </div>` : '';
 
     const c = document.getElementById('resultsContainer');
     const card = document.createElement('div');
@@ -1866,6 +1912,10 @@ function resetCouncil() {
   if(currentEs){currentEs.close();currentEs=null;}
   document.body.classList.remove('session-active');
   document.getElementById('feed').innerHTML='';
+  const _hfcReset = document.getElementById('historyFeedCollapse');
+  if (_hfcReset) { _hfcReset.style.display = 'none'; }
+  if (document.getElementById('hfArrow')) document.getElementById('hfArrow').textContent = '▲';
+  if (document.getElementById('feed')) document.getElementById('feed').style.display = 'none';
   const rc = document.getElementById('resultsContainer');
   rc.innerHTML = ''; rc.classList.remove('active');
   const bp=document.getElementById('broadcastPanel');
@@ -1899,6 +1949,12 @@ function resetCouncil() {
   document.getElementById('probBarWrap')?.classList.remove('has-votes');
   initProbBar();
   deactivateSplitScreen();
+  // U2: 恢复焦点banner
+  const _banner = document.getElementById('featuredMatchBanner');
+  if (_banner && _banner.textContent.trim()) _banner.style.display = 'block';
+  // vote tally 重置
+  const _vt = document.getElementById('voteTally');
+  if (_vt) _vt.style.display = 'none';
   enableControls();
 }
 
