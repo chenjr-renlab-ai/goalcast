@@ -2047,3 +2047,182 @@ body.session-active .quick-pick-row { display: none; }
   opacity: 0.35;
   letter-spacing: 1px;
 }
+
+/* ── N16: 魔鬼代言人猜测（比分弹窗内）── */
+.sm-devil-section {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  background: rgba(240,192,64,.07);
+  border: 1px solid rgba(240,192,64,.2);
+  border-radius: 8px;
+}
+.sm-devil-label {
+  font-size: 11px; color: var(--text-sub); margin-bottom: 8px;
+}
+.sm-devil-label strong { color: var(--gold-bright); }
+.sm-devil-grid {
+  display: flex; flex-wrap: wrap; gap: 5px;
+}
+.sm-devil-btn {
+  padding: 5px 10px; border-radius: 16px;
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.06); color: var(--text-sub);
+  transition: all .18s;
+}
+.sm-devil-btn:hover { background: rgba(255,255,255,.14); color: var(--text); }
+.sm-devil-btn.devil-selected {
+  border-color: var(--gold); color: var(--gold-bright);
+  background: rgba(200,168,50,.18);
+  box-shadow: 0 0 8px rgba(200,168,50,.3);
+}
+/* 魔鬼结果揭晓通知 */
+.devil-result-toast {
+  position: fixed; bottom: 160px; right: 16px; z-index: 500;
+  background: linear-gradient(135deg, rgba(10,10,30,.95), rgba(20,10,40,.95));
+  border: 1px solid rgba(240,192,64,.4); border-radius: 10px;
+  padding: 12px 16px; max-width: 260px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.6);
+  animation: slideInRight .4s ease;
+}
+.drt-title { font-size: 11px; color: var(--gold); font-weight: 700; margin-bottom: 4px; }
+.drt-body  { font-size: 12px; color: var(--text); }
+.drt-result { font-size: 14px; font-weight: 800; margin-top: 6px; }
+.drt-correct { color: var(--green); }
+.drt-wrong   { color: var(--red); }
+@keyframes slideInRight {
+  from { opacity:0; transform: translateX(30px); }
+  to   { opacity:1; transform: translateX(0); }
+}
+
+/* ── F11/N15: 对线争议焦点 overlay ── */
+.debate-topic-overlay {
+  position: absolute;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 30; pointer-events: none;
+  text-align: center;
+  animation: dtoPop .4s cubic-bezier(.175,.885,.32,1.275);
+}
+.dto-label {
+  font-size: 9px; color: rgba(255,200,50,.7);
+  letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px;
+}
+.dto-text {
+  font-size: 15px; font-weight: 800; color: #fff;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
+  border: 1px solid rgba(200,168,50,.4);
+  border-radius: 8px; padding: 8px 16px;
+  text-shadow: 0 0 12px rgba(200,168,50,.5);
+  max-width: 340px;
+}
+@keyframes dtoPop {
+  from { opacity:0; transform: translate(-50%,-50%) scale(.8); }
+  to   { opacity:1; transform: translate(-50%,-50%) scale(1); }
+}
+
+/* ── N5: 空闲状态精彩片段 ── */
+.idle-highlights {
+  position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+  z-index: 25; pointer-events: none; text-align: center; max-width: 60%;
+}
+.ih-label { font-size: 9px; color: rgba(200,168,50,.6); letter-spacing: 1.5px; margin-bottom: 4px; }
+.ih-text {
+  font-size: 13px; font-weight: 700; color: rgba(232,244,255,.75);
+  background: rgba(0,0,0,.4); backdrop-filter: blur(4px);
+  border-radius: 6px; padding: 6px 12px;
+  animation: ihFade 0.8s ease;
+}
+@keyframes ihFade { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── N12/F13: 移动端 Agent 网格 ── */
+.mobile-agent-grid {
+  display: none;
+  padding: 8px 10px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+.mag-row {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+}
+.mag-agent {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 4px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  transition: all .2s; cursor: default;
+}
+.mag-agent.mag-speaking {
+  border-color: var(--agent-color, var(--gold));
+  background: rgba(var(--agent-r,200),var(--agent-g,168),var(--agent-b,50),.12);
+  box-shadow: 0 0 10px var(--agent-color, var(--gold));
+  animation: magPulse .8s ease-in-out infinite;
+}
+@keyframes magPulse { 0%,100%{opacity:1} 50%{opacity:.7} }
+.mag-icon { font-size: 22px; margin-bottom: 2px; }
+.mag-name { font-size: 9px; color: var(--text-sub); font-weight: 700; }
+.mag-stance {
+  font-size: 8px; margin-top: 2px; font-weight: 600;
+  color: var(--agent-color, var(--gold));
+}
+.mag-speech {
+  font-size: 10px; color: var(--text-sub); text-align: center;
+  margin-top: 3px; line-height: 1.3;
+  max-height: 32px; overflow: hidden;
+}
+
+/* 移动端: 触发移动网格 */
+@media (min-width: 601px) {
+  .mobile-agent-grid { display: none !important; }
+}
+@media (max-width: 600px) {
+  .mobile-agent-grid { display: block !important; }
+  .game-arena .agent-col { display: none !important; }
+  .chamber-wrap { flex: 1 !important; }
+  /* 移动端不显示浮层 banner（空间太小容易遮挡 agent 网格）*/
+  body:not(.session-active) #featuredMatchBanner { display: none !important; }
+}
+
+/* ── N14: Agent 卡片金句显示（idle时最后一条金句）── */
+.ac-catchphrase {
+  padding: 5px 8px;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--text-sub);
+  font-style: italic;
+  border-top: 1px solid rgba(255,255,255,.05);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ac-catchphrase::before { content: '"'; color: var(--agent-color, var(--gold)); margin-right: 2px; }
+.ac-catchphrase::after  { content: '"'; color: var(--agent-color, var(--gold)); margin-left: 2px; }
+
+/* ── 8.4: WC 赛事阶段标签 ── */
+.match-stage-badge {
+  display: inline-block; font-size: 9px; font-weight: 700;
+  padding: 1px 6px; border-radius: 3px; margin-left: 5px;
+  vertical-align: middle; letter-spacing: .3px;
+}
+.msb-group    { background: rgba(0,200,100,.12); color: #00e087; border: 1px solid rgba(0,200,100,.2); }
+.msb-knockout { background: rgba(200,100,0,.15);  color: #ffaa44; border: 1px solid rgba(200,100,0,.25); }
+.msb-semi     { background: rgba(200,50,200,.15);  color: #dd88ff; border: 1px solid rgba(200,50,200,.25); }
+.msb-final    { background: rgba(200,168,50,.2);   color: var(--gold-bright); border: 1px solid var(--border-gold); }
+/* 中立场地指示 */
+.neutral-venue-badge {
+  font-size: 9px; color: var(--text-dim); margin-left: 4px;
+  background: rgba(255,255,255,.06); border-radius: 3px; padding: 1px 5px;
+}
+
+/* ── F14 partial: 动态球队主题背景 ── */
+.scene3d-wrap {
+  background: radial-gradient(
+    ellipse 80% 60% at 30% 80%,
+    var(--team-home-color, rgba(30,80,180,.12)) 0%, transparent 60%
+  ),
+  radial-gradient(
+    ellipse 80% 60% at 70% 80%,
+    var(--team-away-color, rgba(180,30,30,.10)) 0%, transparent 60%
+  );
+}

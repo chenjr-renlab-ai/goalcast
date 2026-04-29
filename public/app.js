@@ -82,6 +82,51 @@ const AGENT_BLIND_SPOT = {
 // N4/F4: 议会进度追踪
 let councilProgressState = { phase: null, done: 0, total: 5 };
 
+// N16: 魔鬼代言人猜测
+let userDevilGuess = null;
+
+// N14: Agent 金句 LocalStorage
+const LS_CATCHPHRASE_KEY = 'oracle_agent_catchphrases';
+function loadAgentCatchphrases() {
+  try { return JSON.parse(localStorage.getItem(LS_CATCHPHRASE_KEY) || '{}'); } catch { return {}; }
+}
+function saveAgentCatchphrase(agentId, text) {
+  try {
+    const d = loadAgentCatchphrases();
+    d[agentId] = { text, ts: Date.now() };
+    localStorage.setItem(LS_CATCHPHRASE_KEY, JSON.stringify(d));
+  } catch {}
+}
+
+// N5: 空闲状态精彩片段
+let idleHighlightTimer = null;
+function startIdleHighlights() {
+  const saved = loadLocalHistory();
+  const quotes = [];
+  // 从 localStorage 历史中取金句（存在的话）
+  const allQ = JSON.parse(localStorage.getItem('oracle_last_catchphrases') || '[]');
+  if (!allQ.length) return;
+  let idx = 0;
+  const el = document.getElementById('idleHighlights');
+  const textEl = document.getElementById('ihText');
+  if (!el || !textEl) return;
+  el.style.display = 'block';
+  const show = () => {
+    const q = allQ[idx % allQ.length];
+    textEl.style.animation = 'none'; textEl.offsetHeight;
+    textEl.style.animation = 'ihFade .8s ease';
+    textEl.textContent = `${q.name}：${q.text}`;
+    idx++;
+  };
+  show();
+  idleHighlightTimer = setInterval(show, 4000);
+}
+function stopIdleHighlights() {
+  if (idleHighlightTimer) { clearInterval(idleHighlightTimer); idleHighlightTimer = null; }
+  const el = document.getElementById('idleHighlights');
+  if (el) el.style.display = 'none';
+}
+
 // N13: LocalStorage 本地战绩
 const LS_KEY = 'oracle_council_history';
 function loadLocalHistory() {
@@ -408,6 +453,10 @@ async function init() {
   renderHomepageHitRate();
   // F5: 空闲状态概率条提示
   setProbBarIdleHint(true);
+  // N5: 空闲状态精彩片段
+  startIdleHighlights();
+  // N12: 移动端 agent 网格
+  buildMobileAgentGrid();
 
   // I-2: SSE 页面关闭时主动断开，防止服务端 token 泄漏
   window.addEventListener('beforeunload', () => { currentEs?.close(); currentEs = null; });
@@ -453,6 +502,13 @@ function makeAgentCard(id) {
 
   // 命中率进度条
   const hitWidth = total > 0 ? Math.round(pct) : 0;
+  // N14: 历史金句
+  const savedPhrases = loadAgentCatchphrases();
+  const savedPhrase = savedPhrases[id];
+  const catchphraseHtml = savedPhrase
+    ? `<div class="ac-catchphrase" id="cp-${id}">${escapeHtml(savedPhrase.text.slice(0, 40))}${savedPhrase.text.length > 40 ? '…' : ''}</div>`
+    : `<div class="ac-catchphrase" id="cp-${id}" style="display:none"></div>`;
+
   const idleInfoHtml = `
     <div class="ac-idle-info" id="idle-info-${id}">
       <div class="ac-method">方法：<strong>${AGENT_METHOD_SHORT[id] || '—'}</strong></div>
@@ -473,6 +529,7 @@ function makeAgentCard(id) {
     </div>
     ${accHtml}
     ${idleInfoHtml}
+    ${catchphraseHtml}
     <div class="ac-stance" id="stance-${id}"></div>
     <div class="ac-dot"></div>`;
   return div;
@@ -855,7 +912,25 @@ function showScoreModal() {
     ).join('');
   }
 
+  // N16: 填充魔鬼代言人猜测按钮
+  userDevilGuess = null;
+  const devilGrid = document.getElementById('smDevilGrid');
+  if (devilGrid) {
+    const EXPERTS = ['stat', 'mystic', 'history', 'gambler', 'psych'];
+    devilGrid.innerHTML = EXPERTS.map(id => {
+      const a = AGENTS[id];
+      return `<button class="sm-devil-btn" id="devil-btn-${id}" onclick="setDevilGuess('${id}')">${a.icon} ${a.name}</button>`;
+    }).join('');
+  }
+
   document.getElementById('scoreModalBackdrop')?.classList.add('show');
+}
+
+// N16: 设置魔鬼猜测
+function setDevilGuess(id) {
+  userDevilGuess = id;
+  document.querySelectorAll('.sm-devil-btn').forEach(b => b.classList.remove('devil-selected'));
+  document.getElementById(`devil-btn-${id}`)?.classList.add('devil-selected');
 }
 
 function getQuickPicks(m) {
@@ -1073,6 +1148,51 @@ function setProbBarIdleHint(isIdle) {
   }
 }
 
+// F14 partial: 根据球队颜色动态调整 3D 背景渐变
+const TEAM_COLORS = {
+  '曼联':'rgba(186,0,30,.18)','利物浦':'rgba(200,0,0,.18)','切尔西':'rgba(0,0,168,.18)',
+  '曼城':'rgba(108,171,221,.18)','阿森纳':'rgba(219,0,0,.18)','热刺':'rgba(255,255,255,.1)',
+  '纽卡斯尔':'rgba(0,0,0,.15)','阿斯顿维拉':'rgba(148,0,75,.18)','布莱顿':'rgba(0,87,184,.18)',
+  '富勒姆':'rgba(204,0,0,.12)','伯恩茅斯':'rgba(218,41,28,.18)','布伦特福德':'rgba(190,30,35,.18)',
+  '诺丁汉森林':'rgba(196,30,58,.18)','水晶宫':'rgba(27,69,143,.18)','狼队':'rgba(253,185,19,.18)',
+  '西汉姆':'rgba(122,38,58,.18)','埃弗顿':'rgba(39,68,136,.18)','莱斯特城':'rgba(0,83,160,.18)',
+  '利兹联':'rgba(255,205,0,.14)','桑德兰':'rgba(206,28,38,.18)',
+};
+function _applyTeamThemeColors(m) {
+  const wrap = document.querySelector('.scene3d-wrap');
+  if (!wrap) return;
+  const homeColor = TEAM_COLORS[m.home] || 'rgba(30,80,180,.12)';
+  const awayColor = TEAM_COLORS[m.away] || 'rgba(180,30,30,.10)';
+  wrap.style.setProperty('--team-home-color', homeColor);
+  wrap.style.setProperty('--team-away-color', awayColor);
+}
+
+// N12/F13: 移动端 Agent 网格
+function buildMobileAgentGrid() {
+  const el = document.getElementById('mobileAgentGrid');
+  if (!el) return;
+  const ALL = ['stat','mystic','history','gambler','psych','moderator'];
+  el.innerHTML = `<div class="mag-row">${ALL.map(id => {
+    const a = AGENTS[id];
+    return `<div class="mag-agent" id="mag-${id}" style="--agent-color:${a.cssColor}">
+      <div class="mag-icon">${a.icon}</div>
+      <div class="mag-name">${a.name}</div>
+      <div class="mag-stance" id="mag-stance-${id}"></div>
+    </div>`;
+  }).join('')}</div>`;
+}
+function updateMobileAgentSpeaking(agentId) {
+  document.querySelectorAll('.mag-agent').forEach(el => el.classList.remove('mag-speaking'));
+  if (agentId) document.getElementById(`mag-${agentId}`)?.classList.add('mag-speaking');
+}
+function updateMobileAgentStance(agentId, pick, conf) {
+  const el = document.getElementById(`mag-stance-${agentId}`);
+  if (!el) return;
+  const m = currentMatchData;
+  const labels = { home: `${m?.home||'主'}胜`, draw:'平', away: `${m?.away||'客'}胜` };
+  el.textContent = pick ? `${labels[pick]} ${Math.round((conf||.5)*100)}%` : '';
+}
+
 // N9: 首屏命中率聚合
 function renderHomepageHitRate() {
   const profiles = agentAccuracyProfiles;
@@ -1086,6 +1206,9 @@ function renderHomepageHitRate() {
 }
 
 function renderMatchPanel(m) {
+  // F14 partial: 动态球队主题色（根据队旗 emoji 推导）
+  _applyTeamThemeColors(m);
+
   // N6: 快速押注按钮文字（显示队名）
   const qpH = document.getElementById('qpHome'); if (qpH) qpH.textContent = m.home + ' 胜';
   const qpA = document.getElementById('qpAway'); if (qpA) qpA.textContent = m.away + ' 胜';
@@ -1214,6 +1337,7 @@ function doStartCouncil() {
   // 重置进度 + 概率条提示
   councilProgressState = { phase: null, done: 0, total: 5 };
   setProbBarIdleHint(false);
+  stopIdleHighlights();
   updateCouncilProgress(null, 0, 5);
   // 清理所有 agent score badges
   document.querySelectorAll('.agent-score-badge').forEach(b => b.remove());
@@ -1321,13 +1445,31 @@ function handlePhase({ phase, meta }) {
   }
   if (phase === 'debate' && meta) {
     showVsScreen(meta.agentA, meta.agentB, () => appendPhaseBanner(phase, meta));
-    // Activate split screen with slight delay for dramatic effect
     setTimeout(() => activateSplitScreen(meta.agentA, meta.agentB), 1800);
+    // F11/N15: 显示对线争议焦点
+    if (meta.conflictScore != null) {
+      const agentAName = AGENTS[meta.agentA]?.name || meta.agentA;
+      const agentBName = AGENTS[meta.agentB]?.name || meta.agentB;
+      showDebateTopic(`${agentAName} vs ${agentBName}`);
+    }
   } else {
     showPhaseFlash(phase);
     setTimeout(() => appendPhaseBanner(phase, meta), 600);
-    if (phase !== 'debate') deactivateSplitScreen();
+    if (phase !== 'debate') {
+      deactivateSplitScreen();
+      document.getElementById('debateTopicOverlay').style.display = 'none';
+    }
   }
+}
+
+// F11/N15: 显示/隐藏争议焦点 overlay
+function showDebateTopic(topic) {
+  const el = document.getElementById('debateTopicOverlay');
+  const txt = document.getElementById('debateTopicText');
+  if (!el || !txt) return;
+  txt.textContent = topic;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 8000);
 }
 
 function handleThinking({ agentId }) {
@@ -1484,6 +1626,20 @@ function handleDevilReveal(d) {
   triggerSignatureMoment('devil_reveal', d.agentId,
     changed ? `${agentName}：扮演${playedLabel} → 真实${trueLabel}` : `${agentName}：始终坚持${trueLabel}`,
     AGENTS[d.agentId]?.name + ' 是本场恶魔代言人');
+
+  // N16: 显示魔鬼猜测结果通知
+  if (userDevilGuess) {
+    const correct = userDevilGuess === d.agentId;
+    const toast = document.createElement('div');
+    toast.className = 'devil-result-toast';
+    toast.innerHTML = `
+      <div class="drt-title">🎭 你猜魔鬼是 ${escapeHtml(AGENTS[userDevilGuess]?.name || userDevilGuess)}</div>
+      <div class="drt-body">实际魔鬼代言人是 <strong>${escapeHtml(agentName)}</strong></div>
+      <div class="drt-result ${correct ? 'drt-correct' : 'drt-wrong'}">${correct ? '✅ 猜对了！洞察力一流！' : '❌ 没猜中，下次再试'}</div>`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+    userDevilGuess = null;
+  }
 }
 
 function renderStancePanel(blackboard) {
@@ -1598,6 +1754,7 @@ function handleMessage(data) {
     const rawConf = data.structured.confidence;
     const normConf = rawConf > 1 ? rawConf / 100 : (rawConf || 0.5);
     updateAgentStanceDisplay(data.agentId, data.structured.winner, normConf);
+    updateMobileAgentStance(data.agentId, data.structured.winner, normConf);
   }
 
   // U5: 终投阶段显示实时投票计数（用球队名，不用图标）
@@ -1755,6 +1912,8 @@ function setSpeaking(id, isThinking=false) {
     return;
   }
 
+  // N12: 同步移动端 agent 网格
+  updateMobileAgentSpeaking(id);
   // message 到达时才切换高亮：暗掉其他人，点亮当前发言者
   document.querySelectorAll('.agent-card').forEach(c => {
     c.classList.remove('speaking', 'thinking', 'idle-bg');
@@ -1968,6 +2127,15 @@ function handleSummary({ results, match, evHome, evDraw, evAway }) {
       }
       // 赛后录入
       document.getElementById('resultInputPanel').style.display = 'flex';
+    }
+
+    // N14: 保存每个 agent 的金句到 localStorage（卡片下次显示用）
+    sessionCatchphrases.forEach(cp => {
+      if (cp.text) saveAgentCatchphrase(cp.agentId, cp.text);
+    });
+    // N5: 保存本场金句用于空闲状态轮播
+    if (sessionCatchphrases.length) {
+      localStorage.setItem('oracle_last_catchphrases', JSON.stringify(sessionCatchphrases.slice(0,5)));
     }
 
     // N13: 保存本地战绩
@@ -2221,12 +2389,27 @@ function copyResultSummary() {
   if (verdict) {
     const cleanVerdict = verdict.replace(/^🏆\s*议会裁决[：:]\s*/, '');
     ctx.fillStyle = 'rgba(0,200,100,.12)';
-    rr(CX-195, 230, 390, 36, 6); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,200,100,.35)'; ctx.lineWidth = 1; rr(CX-195, 230, 390, 36, 6); ctx.stroke();
-
+    rr(CX-195, 228, 390, 36, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,200,100,.35)'; ctx.lineWidth = 1; rr(CX-195, 228, 390, 36, 6); ctx.stroke();
     ctx.fillStyle = '#00d46a';
     ctx.font = 'bold 15px "PingFang SC","Microsoft YaHei",sans-serif';
-    ctx.fillText(`⚖️ 议会裁决：${cleanVerdict}`, CX, 253);
+    ctx.fillText(`⚖️ 议会裁决：${cleanVerdict}`, CX, 251);
+  }
+
+  // N10: 我 vs AI 对决横幅（更醒目的用户预测对比）
+  if (userPrediction) {
+    const aiPick = verdict.replace(/^🏆\s*议会裁决[：:]\s*/, '').replace(/胜$/, '').trim();
+    const userLabels = { home:`${m?.home||'主队'}胜`, draw:'平局', away:`${m?.away||'客队'}胜` };
+    const userLabel = userLabels[userPrediction] || userPrediction;
+    const matches = userLabel.includes(aiPick) || aiPick.includes(userLabel.replace('胜','').trim());
+    ctx.fillStyle = matches ? 'rgba(0,224,135,.10)' : 'rgba(220,50,50,.10)';
+    rr(CX-220, 270, 440, 32, 5); ctx.fill();
+    ctx.strokeStyle = matches ? 'rgba(0,224,135,.3)' : 'rgba(220,50,50,.25)'; ctx.lineWidth = 1;
+    rr(CX-220, 270, 440, 32, 5); ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = matches ? '#00e087' : '#ff6677';
+    ctx.font = 'bold 12px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillText(`我押 ${userLabel} ${matches ? '✅ 与议会一致' : '⚡ 挑战议会'}`, CX, 291);
   }
 
   // ── 分割线 ──
@@ -2407,6 +2590,11 @@ function resetCouncil() {
   // vote tally 重置
   const _vt = document.getElementById('voteTally');
   if (_vt) _vt.style.display = 'none';
+  // 恢复空闲状态
+  setProbBarIdleHint(true);
+  startIdleHighlights();
+  updateCouncilProgress(null, 0, 5);
+  document.getElementById('debateTopicOverlay').style.display = 'none';
   enableControls();
 }
 

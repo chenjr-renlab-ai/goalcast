@@ -198,6 +198,16 @@
           <div class="ss-agent-card" id="ssCardRight"></div>
         </div>
       </div>
+      <!-- F11/N15: 对线争议焦点 overlay -->
+      <div class="debate-topic-overlay" id="debateTopicOverlay" style="display:none">
+        <div class="dto-label">⚔️ 争议焦点</div>
+        <div class="dto-text" id="debateTopicText"></div>
+      </div>
+      <!-- N5: 空闲状态精彩片段 ticker -->
+      <div class="idle-highlights" id="idleHighlights" style="display:none">
+        <div class="ih-label">🔥 上一场金句</div>
+        <div class="ih-text" id="ihText"></div>
+      </div>
       <!-- 发言框：悬浮在 3D 场景底部 -->
       <div class="broadcast-panel" id="broadcastPanel">
         <div class="broadcast-placeholder">⚖️ 预言者议会即将开始</div>
@@ -236,6 +246,11 @@
   <!-- Right: gambler, psych, moderator -->
   <aside class="agent-col right" id="agentColRight"></aside>
 
+</div>
+
+<!-- N12/F13: 移动端 Agent 网格（3D 不可见时显示）-->
+<div class="mobile-agent-grid" id="mobileAgentGrid">
+  <!-- 由 JS 动态填充 -->
 </div>
 
 <!-- Feature 2: Signature Moment -->
@@ -354,8 +369,15 @@
       <!-- 热门比分快选，由 JS 填充 -->
     </div>
     <div class="sm-agent-hint" id="smAgentHint"></div>
+    <!-- N16: 魔鬼代言人猜测 -->
+    <div class="sm-devil-section">
+      <div class="sm-devil-label">🎭 猜猜谁是今晚的<strong>魔鬼代言人</strong>（故意押错方的卧底）？</div>
+      <div class="sm-devil-grid" id="smDevilGrid">
+        <!-- 由 JS 填充 agent 按钮 -->
+      </div>
+    </div>
     <div class="sm-actions">
-      <button class="sm-confirm-btn" id="smConfirmBtn" onclick="confirmScore()">确认比分预言</button>
+      <button class="sm-confirm-btn" id="smConfirmBtn" onclick="confirmScore()">确认并召开议会</button>
       <button class="sm-skip-btn" onclick="skipScore()">跳过</button>
     </div>
   </div>
