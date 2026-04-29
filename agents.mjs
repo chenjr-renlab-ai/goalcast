@@ -497,6 +497,89 @@ const METHOD_CLASH = {
   'mystic→psych':   '碎碎念说球员心理好，但舆论在这支队身上堆积了太多正面情绪——过度期待本身就是心理炸弹',
 };
 
+// ── 终投指令生成：每个 agent 独立视角，禁止重复 ──────────────────────
+function buildVoteDirective(agentId, blackboard, debateHistory, agentA, agentB, match) {
+  const stance = blackboard.agentStances[agentId];
+  const myPick = stance?.pick === 'home' ? `${match.home}赢` : stance?.pick === 'away' ? `${match.away}赢` : '平局';
+  const myConf = stance ? Math.round((stance.conf ?? 0.5) * 100) + '%' : '?';
+
+  // 对线双方
+  const debaterIds = [agentA?.agentId, agentB?.agentId].filter(Boolean);
+  const wasDebater = debaterIds.includes(agentId);
+
+  // 前面已投票的人说了什么（去重用）
+  const priorVotes = blackboard.history
+    .filter(m => m.phase === 'vote' && m.agentId !== 'moderator' && m.agentId !== agentId)
+    .map(m => `${AGENT_NAMES[m.agentId]}："${(m.speech || '').slice(0, 40)}…"`)
+    .join('\n');
+
+  // 对线摘要（有对线才给）
+  const debateSummary = debateHistory.length > 0
+    ? debateHistory.slice(-6).map(d => `${AGENT_NAMES[d.agentId]}："${(d.speech || '').slice(0, 45)}…"`).join('\n')
+    : null;
+
+  // 立场转向信息
+  const pivot = blackboard.pivotMoments.find(p => p.agentId === agentId);
+  const pivotNote = pivot
+    ? `（注意：你在对线中已从"${pivot.from === 'home' ? match.home+'赢' : pivot.from === 'away' ? match.away+'赢' : '平局'}"转向"${pivot.to === 'home' ? match.home+'赢' : pivot.to === 'away' ? match.away+'赢' : '平局'}"，终投要承认这个转变或解释你为什么又改了主意）`
+    : '';
+
+  // 前面已说的内容提示
+  const avoidRepeat = priorVotes
+    ? `\n【以下内容已被说过，禁止重复，必须说完全不同的事】\n${priorVotes}`
+    : '';
+
+  // 当前全员立场快照
+  const allStances = Object.entries(blackboard.agentStances)
+    .filter(([id]) => id !== agentId && id !== 'moderator')
+    .map(([id, s]) => `${AGENT_NAMES[id]}押${s.pick === 'home' ? match.home+'赢' : s.pick === 'away' ? match.away+'赢' : '平局'}(${Math.round((s.conf||0.5)*100)}%)`)
+    .join('，');
+
+  // 每个 agent 的独家终投视角
+  const UNIQUE_ANGLE = {
+    stat:
+      `你是数据帝，终投必须做一件其他人做不到的事：把今晚辩论里出现的所有论点折算成概率变化。
+${debateSummary ? '对线摘要：\n' + debateSummary + '\n' : ''}有没有某个论点让你的泊松参数需要修正？修正后P(${match.home}赢)/P(平)/P(${match.away}赢)各是多少？
+必须给出三个更新后的概率数字，哪怕变化微小也要说明原因。禁止只说"我坚持初判"——要量化地说坚持的证据。`,
+
+    gambler:
+      `你是盘口派，终投必须说一件其他人说不出的事：今晚所有分析里，哪个论点最接近"职业资金会押的逻辑"，哪个是散户思维？
+${debateSummary ? '对线摘要：\n' + debateSummary + '\n' : ''}给出你的赔率判断：今晚的分析有没有改变你对公众盘 vs 职业盘分歧的判断？最终你跟职业盘走，意味着押什么？`,
+
+    history:
+      `你是历史区，终投必须补一个今晚谁都没说过的历史数据点——一场具体的历史比赛，或者一个你刚想起来的统计。
+${debateSummary ? '对线里说了：\n' + debateSummary + '\n' : ''}那个被所有人忽略的历史细节，支持还是推翻了主流判断？历史的最终裁决是什么？`,
+
+    psych:
+      `你是行为语言分析师，终投必须分析今晚议会辩论本身的心理模式——不是比赛，是这场议会。
+谁的发言里有防御性信号？谁越说越底气不足？谁在压力下改变了措辞？
+${debateSummary ? '对线发言：\n' + debateSummary + '\n' : ''}把这个心理结构映射到场上：哪支球队的球员心态可能跟今晚某位输了辩论的 agent 一样？`,
+
+    mystic:
+      `你是舆情叙事分析师，终投必须给出今晚对线结束后的"叙事强度更新"。
+今晚所有分析有没有改变媒体/社交的叙事方向？${debateSummary ? '\n对线摘要：\n' + debateSummary + '\n' : ''}
+叙事强度是上升了（热门更被相信）还是下降了（叙事被数据打脸）？你是顺叙事还是逆叙事，理由是什么？`,
+  };
+
+  const roleAngle = UNIQUE_ANGLE[agentId] || `用你的方法论【${AGENT_METHOD[agentId]}】给出最终判断。`;
+
+  const debaterContext = wasDebater
+    ? `你参与了今晚的对线，现在宣布你的最终立场——你在辩论中坚守住了吗？`
+    : `你今晚作为旁观者看了对线，现在从场外视角做最终裁决。`;
+
+  return `终极裁决。
+你的当前立场：${myPick}（${myConf}置信度）${pivotNote}
+其他人的立场：${allStances || '（暂无）'}
+${debaterContext}
+
+${roleAngle}
+${avoidRepeat}
+
+必须填 structured（winner + score + confidence + keyFactor，和初判相比要有变化，哪怕是置信度变了）。
+必须写 scenePrediction（终局画面：第X分钟+球员名+动作，20-35字）。
+speech 40-60字，catchphrase 含数字或球员名，20字内。`;
+}
+
 // ── 辩论指令生成：方法论碰撞版 ──────────────────────────────────────
 function buildDebateDirective(round, atkId, defId, defMsg, match) {
   const atkDataLines = extractAgentDataValues(match, atkId);
@@ -960,39 +1043,15 @@ ${thirdData.length ? '你的独占数据：\n' + thirdData.join('\n') + '\n' : '
   const voteMsgs = [];
   const devilTrueStance = blackboard.agentStances[blackboard.devilAdvocate];
 
-  // 构建对线摘要：让每个 agent 知道对线说了什么
-  const debateSummaryForVote = debateHistory.length > 0
-    ? debateHistory.slice(-4).map(d => `${AGENT_NAMES[d.agentId]}："${(d.speech ?? '').slice(0, 35)}…"`).join('\n')
-    : '';
-
   for (const id of EXPERTS) {
     emit({ type: "thinking", agentId: id });
-    const myInitialStance = blackboard.agentStances[id];
-    const myInitialPick = myInitialStance?.pick === 'home' ? '主队赢' : myInitialStance?.pick === 'away' ? '客队赢' : '平局';
     try {
-      const msg = await callAgent(
-        id,
-        `终极裁决。
-【对线摘要——你必须基于这些内容做判断】
-${debateSummaryForVote || '（对线内容暂无）'}
-
-你的初判是：${myInitialPick}
-
-你现在要：
-① 点出对线中一句最关键的发言（是哪个人说的什么）——它打动了你还是激怒了你？
-② 它有没有改变你的判断？如果改变了，说明为什么；如果没有，说明你的论点哪里比对方更扎实。
-③ 用你的方法论（数据/叙事/历史/心理/盘口）给出最终比分，这是你今晚最有力的一句话。
-
-必须填 structured 字段（winner + score + confidence + keyFactor）。
-必须写 scenePrediction（终局画面：分钟数+球员名+动作，20-35字）。
-catchphrase 是今晚最有分量的那句话（含数字或球员名，20字以内）。
-speech 40-60字，不要重复初判内容。`,
-        "vote"
-      );
+      // 每个 agent 拿到自己专属的视角指令（包含"前面已说什么"的去重上下文）
+      const voteDirective = buildVoteDirective(id, blackboard, debateHistory, agentA, agentB, match);
+      const msg = await callAgent(id, voteDirective, "vote");
       addMsg(msg);
       maybeAddInsight(msg);
       voteMsgs.push(msg);
-      if (id !== EXPERTS[EXPERTS.length - 1]) await new Promise((r) => setTimeout(r, 400));
     } catch (e) {
       logMonitor(blackboard, { type: "error", agentId: id, phase: "vote", msg: e.message });
     }
