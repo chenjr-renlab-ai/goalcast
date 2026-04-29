@@ -61,6 +61,40 @@ const AGENT_METHOD_LABEL = {
   moderator: '综合裁判',
 };
 
+// N3/F3: Agent 卡片空闲态：方法简介
+const AGENT_METHOD_SHORT = {
+  stat:      'Poisson 概率模型',
+  gambler:   '跨平台盘口套利',
+  history:   '历史情景匹配',
+  psych:     '行为语言分析',
+  mystic:    '社交叙事检测',
+  moderator: '综合裁判',
+};
+const AGENT_BLIND_SPOT = {
+  stat:      '盲点：不信心理因素',
+  gambler:   '盲点：过度解读异动',
+  history:   '盲点：确认偏误',
+  psych:     '盲点：过度拟人化',
+  mystic:    '盲点：为逆向而逆向',
+  moderator: '—',
+};
+
+// N4/F4: 议会进度追踪
+let councilProgressState = { phase: null, done: 0, total: 5 };
+
+// N13: LocalStorage 本地战绩
+const LS_KEY = 'oracle_council_history';
+function loadLocalHistory() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { return []; }
+}
+function saveLocalHistory(entry) {
+  try {
+    const h = loadLocalHistory();
+    h.unshift(entry);
+    localStorage.setItem(LS_KEY, JSON.stringify(h.slice(0, 50)));
+  } catch {}
+}
+
 // D: 比赛重要性分级（焦点战排序）
 const STAKES_ORDER = { title: 0, relegation: 1, top4: 2, mixed: 3, mid: 4 };
 const STAKES_BADGE = { title:'🔥 争冠', relegation:'⚠️ 保级', top4:'🌟 争四', mixed:'↕️ 上下', mid:'' };
@@ -370,6 +404,10 @@ async function init() {
   const canvas = document.getElementById('threeCanvas');
   if (canvas && window.THREE && window.Scene3D) Scene3D.init(canvas);
   await Promise.all([loadMatches(), fetchAccuracyProfiles()]);
+  // N9: 初始化命中率显示
+  renderHomepageHitRate();
+  // F5: 空闲状态概率条提示
+  setProbBarIdleHint(true);
 
   // I-2: SSE 页面关闭时主动断开，防止服务端 token 泄漏
   window.addEventListener('beforeunload', () => { currentEs?.close(); currentEs = null; });
@@ -413,6 +451,15 @@ function makeAgentCard(id) {
     ? `<div class="ac-accuracy"><span class="ac-icons">${icons}</span><span class="ac-pct">${pct}%</span><span class="ac-n">近${total}场</span></div>`
     : `<div class="ac-accuracy ac-empty">首场预测中…</div>`;
 
+  // 命中率进度条
+  const hitWidth = total > 0 ? Math.round(pct) : 0;
+  const idleInfoHtml = `
+    <div class="ac-idle-info" id="idle-info-${id}">
+      <div class="ac-method">方法：<strong>${AGENT_METHOD_SHORT[id] || '—'}</strong></div>
+      <div class="ac-blindspot">${AGENT_BLIND_SPOT[id] || ''}</div>
+      ${total > 0 ? `<div class="ac-hitrate-bar"><div class="ac-hitrate-fill" style="width:${hitWidth}%"></div></div>` : ''}
+    </div>`;
+
   const div = document.createElement('div');
   div.className = 'agent-card';
   div.id = `card-${id}`;
@@ -425,6 +472,7 @@ function makeAgentCard(id) {
       <div class="ac-title">${a.title}</div>
     </div>
     ${accHtml}
+    ${idleInfoHtml}
     <div class="ac-stance" id="stance-${id}"></div>
     <div class="ac-dot"></div>`;
   return div;
@@ -980,7 +1028,71 @@ async function onMatchChange(e) {
   await loadMatchDetail(e.target.value);
 }
 
+// N6: 快速押注（3按钮）
+function setQuickPick(pick) {
+  userPrediction = pick;
+  selectedPick = pick;
+  const m = currentMatchData;
+  ['home','draw','away'].forEach(p => {
+    const btn = document.getElementById('qp' + p.charAt(0).toUpperCase() + p.slice(1));
+    if (btn) btn.classList.toggle('qp-active', p === pick);
+  });
+}
+
+// N4/F4: 更新初判进度指示器
+function updateCouncilProgress(phase, doneCount, totalCount) {
+  const el = document.getElementById('councilProgress');
+  if (!el) return;
+  const EXPERTS = ['stat', 'mystic', 'history', 'gambler', 'psych'];
+  if (phase === 'initial') {
+    el.style.display = 'block';
+    const dots = EXPERTS.map((id, i) => {
+      const cls = i < doneCount ? 'cp-dot cp-done' : i === doneCount ? 'cp-dot cp-active' : 'cp-dot cp-wait';
+      return `<span class="${cls}" title="${AGENTS[id]?.name || id}"></span>`;
+    }).join('');
+    el.innerHTML = `初判 ${doneCount}/${totalCount} ${dots}`;
+  } else if (phase === 'debate') {
+    el.innerHTML = `⚔️ 对线辩论中`;
+  } else if (phase === 'vote') {
+    el.innerHTML = `🗳️ 终极投票中`;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// F5: 概率条空闲提示开关
+function setProbBarIdleHint(isIdle) {
+  const lbl = document.getElementById('probCenterLabel');
+  if (!lbl) return;
+  if (isIdle) {
+    lbl.textContent = '🔮 召开议会以获取 AI 预测';
+    lbl.classList.add('idle-hint');
+  } else {
+    lbl.textContent = '预 测 走 势';
+    lbl.classList.remove('idle-hint');
+  }
+}
+
+// N9: 首屏命中率聚合
+function renderHomepageHitRate() {
+  const profiles = agentAccuracyProfiles;
+  const ids = Object.keys(profiles).filter(id => (profiles[id]?.total || 0) >= 3);
+  if (!ids.length) return;
+  const total = ids.reduce((s, id) => s + (profiles[id].total || 0), 0);
+  const correct = ids.reduce((s, id) => s + (profiles[id].correct || 0), 0);
+  const pct = total > 0 ? Math.round(correct / total * 100) : 0;
+  const el = document.getElementById('seedsStatus');
+  if (el) el.innerHTML = `<span style="font-size:10px;color:var(--gold)">📊 近${total}场议会命中率 ${pct}%</span>`;
+}
+
 function renderMatchPanel(m) {
+  // N6: 快速押注按钮文字（显示队名）
+  const qpH = document.getElementById('qpHome'); if (qpH) qpH.textContent = m.home + ' 胜';
+  const qpA = document.getElementById('qpAway'); if (qpA) qpA.textContent = m.away + ' 胜';
+  // 重置押注选中状态
+  ['qpHome','qpDraw','qpAway'].forEach(id => document.getElementById(id)?.classList.remove('qp-active'));
+  userPrediction = null; selectedPick = null;
+
   // Top bar elements (new IDs)
   const setTb = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   setTb('tbHomeFlag', m.homeFlag);
@@ -1099,6 +1211,10 @@ function doStartCouncil() {
   setSpeaking(null);
   sessionCatchphrases = []; sessionScenes = [];
   agentPredictedScores = {};
+  // 重置进度 + 概率条提示
+  councilProgressState = { phase: null, done: 0, total: 5 };
+  setProbBarIdleHint(false);
+  updateCouncilProgress(null, 0, 5);
   // 清理所有 agent score badges
   document.querySelectorAll('.agent-score-badge').forEach(b => b.remove());
   // 重置结果面板
@@ -1183,6 +1299,8 @@ function handlePivot({ agentId, round, to }) {
     setTimeout(() => card.classList.remove('pivot-flash'), 1400);
   }
   window.Scene3D?.triggerBurst?.(agentId);
+  // F8: 立场转向颜色闪烁动画
+  window.Scene3D?.flashPivotColor?.(agentId, to);
 }
 
 function handlePhase({ phase, meta }) {
@@ -1193,6 +1311,14 @@ function handlePhase({ phase, meta }) {
     else if (i===idx) s.classList.add('active');
   });
   setSpeaking(null);
+  // N4: 进度指示器联动
+  councilProgressState.phase = phase;
+  if (phase === 'initial') {
+    councilProgressState.done = 0;
+    updateCouncilProgress('initial', 0, councilProgressState.total);
+  } else {
+    updateCouncilProgress(phase, councilProgressState.done, councilProgressState.total);
+  }
   if (phase === 'debate' && meta) {
     showVsScreen(meta.agentA, meta.agentB, () => appendPhaseBanner(phase, meta));
     // Activate split screen with slight delay for dramatic effect
@@ -1438,6 +1564,14 @@ function handleMessage(data) {
     sessionCatchphrases.push({ agentId:data.agentId, text:data.catchphrase, color:agent.color, cssColor:agent.cssColor, name:agent.name });
   if (data.scenePrediction && (data.phase==='initial'||data.phase==='vote'))
     sessionScenes.push({ agentId:data.agentId, text:data.scenePrediction, color:agent.color, cssColor:agent.cssColor, name:agent.name });
+
+  // N4: 初判阶段进度计数
+  if (data.phase === 'initial' && data.agentId !== 'moderator') {
+    councilProgressState.done = Math.min(councilProgressState.done + 1, councilProgressState.total);
+    updateCouncilProgress('initial', councilProgressState.done, councilProgressState.total);
+  }
+  // 结束时隐藏进度
+  if (data.phase === 'vote') updateCouncilProgress('vote', 0, 0);
 
   updateBroadcast(data, agent);
   addHistoryItem(data, agent);
@@ -1835,7 +1969,68 @@ function handleSummary({ results, match, evHome, evDraw, evAway }) {
       // 赛后录入
       document.getElementById('resultInputPanel').style.display = 'flex';
     }
+
+    // N13: 保存本地战绩
+    saveLocalHistory({
+      ts: Date.now(),
+      home: match?.home, away: match?.away,
+      stage: match?.stage,
+      verdict: winner.key,
+      verdictLabel: winner.label,
+      userPick: userPrediction,
+      pct: Math.round(winner.pct),
+    });
+
+    // N11: 下一场推荐卡片
+    const allM = allMatches || [];
+    const currentIdx = allM.findIndex(m => m.id === match?.id);
+    const nextMatch = allM[(currentIdx + 1) % allM.length];
+    if (nextMatch && nextMatch.id !== match?.id) {
+      const nmHtml = `<div class="next-match-card" onclick="loadAndSwitch('${nextMatch.id}')">
+        <div class="nmc-label">▶ 下一场推荐</div>
+        <div class="nmc-match">${nextMatch.homeFlag || ''} ${nextMatch.home} vs ${nextMatch.awayFlag || ''} ${nextMatch.away}</div>
+        <div class="nmc-meta">${nextMatch.stage || ''} · ${nextMatch.date || ''}</div>
+      </div>`;
+      card.insertAdjacentHTML('beforeend', nmHtml);
+    }
+
+    // N7: 2秒后自动弹出分享预览
+    setTimeout(() => showSharePreview(), 2200);
   }, 800);
+}
+
+// N7: 分享预览弹窗
+function showSharePreview() {
+  const existing = document.getElementById('sharePreviewModal');
+  if (existing) return;
+  const modal = document.createElement('div');
+  modal.id = 'sharePreviewModal';
+  modal.className = 'share-preview-modal';
+  modal.innerHTML = `
+    <div class="share-preview-inner">
+      <div class="share-preview-title">🏆 议会预测完成！分享战报</div>
+      <div style="font-size:11px;color:var(--text-sub);text-align:center;margin-bottom:8px">
+        ${currentMatchData?.home || ''} vs ${currentMatchData?.away || ''} · ${sessionCatchphrases[0]?.text?.slice(0,30) || '精彩对决'}…
+      </div>
+      <div class="share-preview-actions">
+        <button class="sp-copy" onclick="copyResultSummary();document.getElementById('sharePreviewModal')?.remove()">
+          🖼️ 生成战报图片
+        </button>
+        <button class="sp-close" onclick="document.getElementById('sharePreviewModal')?.remove()">
+          稍后再说
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+// N11: 加载并切换到另一场比赛
+async function loadAndSwitch(matchId) {
+  document.getElementById('sharePreviewModal')?.remove();
+  const sel = document.getElementById('matchSel');
+  if (sel) { sel.value = matchId; await loadMatchDetail(matchId); }
+  resetCouncil();
 }
 
 function calcClientHitLevel(predicted, actual) {

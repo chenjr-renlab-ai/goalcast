@@ -4,33 +4,33 @@ html,body { height:100%; }
 
 /* ========== CSS 变量 ========== */
 :root {
-  /* 背景 */
-  --bg-base:    #030d07;
-  --bg-panel:   #050f09;
-  --bg-card:    #081409;
-  --bg-input:   #0a1a0c;
-  /* 主调：世界杯绿 + 竞技蓝 */
+  /* 背景：WC深海蓝方案（替换英超草绿） */
+  --bg-base:    #020815;
+  --bg-panel:   #040d1a;
+  --bg-card:    #060e1c;
+  --bg-input:   #0a1428;
+  /* 主调：FIFA深海蓝 + 竞技蓝 */
   --wc-green:   #00d46a;
-  --wc-grass:   #1a7a2a;
-  --wc-grass2:  #124d1a;
+  --wc-primary: #1a3a6e;
+  --wc-navy:    #0d2040;
   --neon-blue:  #00c8ff;
   --neon-blue2: #0088cc;
   --neon-purple:#8855ff;
   --neon-glow:  rgba(0,200,255,0.15);
-  /* 强调：FIFA金（奖杯色） */
+  /* 强调：FIFA金（奖杯色，保留） */
   --gold:       #c8a832;
   --gold-bright:#f0d060;
   --gold-dim:   rgba(200,168,50,0.14);
   --gold-line:  rgba(200,168,50,0.3);
   /* 文字 */
-  --text:       #ddeeff;
-  --text-sub:   rgba(221,238,255,0.5);
-  --text-dim:   rgba(221,238,255,0.2);
+  --text:       #e8f4ff;
+  --text-sub:   rgba(232,244,255,0.5);
+  --text-dim:   rgba(232,244,255,0.2);
   /* 功能色 */
   --green:      #00e087;
   --red:        #ff3355;
   --orange:     #ff8833;
-  /* agent 专属 */
+  /* agent 专属（不变） */
   --stat:       #4aabff;
   --mystic:     #bb66ff;
   --history:    #ffaa22;
@@ -46,18 +46,18 @@ html,body { height:100%; }
 /* ========== 基础 ========== */
 body {
   font-family: -apple-system,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
-  background: #030e06;
-  /* 世界杯绿茵场 + 体育场灯光氛围 */
+  background: #020815;
+  /* WC 2026 深海蓝：FIFA体育场夜间灯光氛围 */
   background-image:
-    /* 顶部体育场灯光蓝白 */
-    radial-gradient(ellipse 130% 45% at 50% 0%, rgba(30,80,180,0.35) 0%, transparent 55%),
-    /* 底部草坪绿 */
-    radial-gradient(ellipse 140% 40% at 50% 105%, rgba(0,120,30,0.30) 0%, transparent 55%),
-    /* 左右两侧球场侧光 */
-    radial-gradient(ellipse 35% 90% at 0% 50%, rgba(0,80,20,0.18) 0%, transparent 60%),
-    radial-gradient(ellipse 35% 90% at 100% 50%, rgba(0,80,20,0.18) 0%, transparent 60%),
-    /* 中心淡绿焦点 */
-    radial-gradient(ellipse 60% 50% at 50% 60%, rgba(0,60,15,0.22) 0%, transparent 70%);
+    /* 顶部聚光灯白蓝 */
+    radial-gradient(ellipse 130% 45% at 50% 0%, rgba(20,60,160,0.50) 0%, transparent 55%),
+    /* 底部深蓝 */
+    radial-gradient(ellipse 140% 40% at 50% 105%, rgba(10,30,80,0.40) 0%, transparent 55%),
+    /* 左右侧光（冷蓝） */
+    radial-gradient(ellipse 35% 90% at 0% 50%, rgba(0,40,120,0.22) 0%, transparent 60%),
+    radial-gradient(ellipse 35% 90% at 100% 50%, rgba(0,40,120,0.22) 0%, transparent 60%),
+    /* 中心金光（奖杯光晕） */
+    radial-gradient(ellipse 60% 50% at 50% 60%, rgba(60,40,0,0.18) 0%, transparent 70%);
   color: var(--text);
   height: 100vh; overflow: hidden;
   display: flex; flex-direction: column;
@@ -1935,3 +1935,115 @@ body.session-active .history-feed { max-height:56px; }
   border-bottom: none;
 }
 .cl-body li::marker { color: var(--gold); }
+
+/* ── 快速押注按钮（N6：3大按钮押注 UI）── */
+.quick-pick-row {
+  display: flex; gap: 4px; margin-bottom: 5px;
+}
+.qp-btn {
+  flex: 1; padding: 6px 4px; border-radius: 5px; font-size: 11px; font-weight: 700;
+  cursor: pointer; border: 1px solid; transition: all .18s; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.qp-home { background: rgba(30,80,220,.15); color: #7aadff; border-color: rgba(30,80,220,.3); }
+.qp-draw { background: rgba(200,168,50,.12); color: var(--gold); border-color: rgba(200,168,50,.3); }
+.qp-away { background: rgba(200,30,50,.15);  color: #ff8888; border-color: rgba(200,30,50,.3); }
+.qp-btn.qp-active { transform: scale(1.04); box-shadow: 0 0 8px currentColor; }
+.qp-home.qp-active { background: rgba(30,80,220,.35); border-color: #5599ff; }
+.qp-draw.qp-active { background: rgba(200,168,50,.30); border-color: var(--gold-bright); }
+.qp-away.qp-active { background: rgba(200,30,50,.35);  border-color: #ff6677; }
+body.session-active .quick-pick-row { display: none; }
+
+/* ── 初判进度指示器（N4/F4）── */
+.council-progress {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,.6); border: 1px solid rgba(200,168,50,.3);
+  border-radius: 20px; padding: 4px 14px; font-size: 11px;
+  color: var(--gold); letter-spacing: .5px; white-space: nowrap;
+  backdrop-filter: blur(4px); z-index: 50;
+  pointer-events: none;
+}
+.cp-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 2px; vertical-align: middle; }
+.cp-done  { background: var(--green); }
+.cp-active { background: var(--gold-bright); animation: cpPulse .8s ease-in-out infinite; }
+.cp-wait  { background: rgba(255,255,255,.2); }
+@keyframes cpPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+
+/* ── 概率条空闲提示（F5）── */
+#probCenterLabel.idle-hint {
+  font-size: 10px; color: rgba(200,168,50,.65);
+  letter-spacing: .3px; animation: hintPulse 2.5s ease-in-out infinite;
+}
+@keyframes hintPulse { 0%,100%{opacity:.65} 50%{opacity:1} }
+
+/* ── Agent 卡片空闲状态增强（N3/F3）── */
+.ac-idle-info {
+  padding: 6px 8px 0;
+  border-top: 1px solid rgba(255,255,255,.06);
+  margin-top: 4px;
+}
+.ac-method { font-size: 9px; color: var(--text-sub); letter-spacing: .3px; margin-bottom: 2px; }
+.ac-method strong { color: var(--agent-color, var(--gold)); }
+.ac-blindspot { font-size: 9px; color: rgba(255,80,80,.65); }
+.ac-hitrate-bar {
+  height: 3px; background: rgba(255,255,255,.1); border-radius: 2px;
+  margin-top: 5px; overflow: hidden;
+}
+.ac-hitrate-fill { height: 100%; background: var(--agent-color, var(--green)); border-radius: 2px; transition: width .5s; }
+
+/* ── 分享预览弹窗（N7）── */
+.share-preview-modal {
+  position: fixed; inset: 0; z-index: 800;
+  background: rgba(0,0,0,.75); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn .3s;
+}
+.share-preview-inner {
+  background: linear-gradient(160deg, var(--bg-panel), var(--bg-base));
+  border: 1px solid rgba(200,168,50,.4); border-radius: 12px;
+  padding: 20px; max-width: 480px; width: 92vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,.8);
+}
+.share-preview-title {
+  font-size: 14px; font-weight: 700; color: var(--gold-bright);
+  margin-bottom: 14px; text-align: center;
+}
+.share-preview-actions {
+  display: flex; gap: 8px; margin-top: 16px;
+}
+.share-preview-actions button {
+  flex: 1; padding: 10px; border-radius: 6px; font-weight: 700;
+  font-size: 12px; cursor: pointer; border: 1px solid; transition: all .2s;
+}
+.sp-copy { background: rgba(200,168,50,.2); color: var(--gold-bright); border-color: var(--border-gold); }
+.sp-copy:hover { background: rgba(200,168,50,.35); }
+.sp-close { background: rgba(255,255,255,.08); color: var(--text-sub); border-color: var(--border); }
+.sp-close:hover { background: rgba(255,255,255,.14); }
+
+/* ── 下一场推荐卡（N11）── */
+.next-match-card {
+  margin-top: 14px; padding: 10px 12px;
+  background: rgba(0,200,255,.06); border: 1px solid rgba(0,200,255,.2);
+  border-radius: 8px; cursor: pointer; transition: all .2s;
+}
+.next-match-card:hover { background: rgba(0,200,255,.12); }
+.nmc-label { font-size: 9px; color: var(--neon-blue); letter-spacing: 1px; margin-bottom: 4px; }
+.nmc-match { font-size: 13px; font-weight: 700; color: var(--text); }
+.nmc-meta  { font-size: 10px; color: var(--text-sub); margin-top: 3px; }
+
+/* ── 战绩历史徽章（N13 LocalStorage）── */
+.history-badge {
+  font-size: 9px; padding: 2px 6px; border-radius: 10px;
+  background: rgba(0,224,135,.12); color: var(--green);
+  border: 1px solid rgba(0,224,135,.25); margin-left: 6px;
+}
+
+/* ── 焦点 banner 字体增大（4.1 FA-6）── */
+.featured-banner { font-size: 13px !important; }
+
+/* ── 3D 议事厅底部标签优化 ── */
+.scene3d-label {
+  font-size: 10px;
+  opacity: 0.35;
+  letter-spacing: 1px;
+}

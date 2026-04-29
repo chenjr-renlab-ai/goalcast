@@ -529,17 +529,18 @@ window.Scene3D = (() => {
 
     const bigScreenTex = new THREE.CanvasTexture(bigScreenCvs);
     const bigScreen = new THREE.Mesh(
-      new THREE.PlaneGeometry(RADIUS * 3.8, RADIUS * 1.9),
-      new THREE.MeshBasicMaterial({ map: bigScreenTex, transparent: true, opacity: 0.88, side: THREE.DoubleSide })
+      // F1: 背景板缩小至 60%，减淡 opacity，避免遮挡 agent
+      new THREE.PlaneGeometry(RADIUS * 2.2, RADIUS * 1.1),
+      new THREE.MeshBasicMaterial({ map: bigScreenTex, transparent: true, opacity: 0.22, side: THREE.DoubleSide })
     );
-    bigScreen.position.set(0, 3.8, -(RADIUS * 2.72));
+    bigScreen.position.set(0, 4.5, -(RADIUS * 2.72));
     scene.add(bigScreen);
 
-    // 大屏外框（发光边框）
-    const frameGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(RADIUS * 3.85, RADIUS * 1.95, 0.05));
-    const frameMat = new THREE.LineBasicMaterial({ color: 0x00aa44, transparent: true, opacity: 0.5 });
+    // 大屏外框（发光边框）—— 也一起缩小
+    const frameGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(RADIUS * 2.25, RADIUS * 1.15, 0.05));
+    const frameMat = new THREE.LineBasicMaterial({ color: 0x1a4a8a, transparent: true, opacity: 0.3 });
     const frameLines = new THREE.LineSegments(frameGeo, frameMat);
-    frameLines.position.set(0, 3.8, -(RADIUS * 2.71));
+    frameLines.position.set(0, 4.5, -(RADIUS * 2.71));
     scene.add(frameLines);
 
     // ── 世界杯 2026 LED 大屏文字横幅 ─────────────────────────
@@ -573,8 +574,9 @@ window.Scene3D = (() => {
     bctx.beginPath(); bctx.moveTo(60, 70); bctx.lineTo(964, 70); bctx.stroke();
     const bannerTex = new THREE.CanvasTexture(bannerCvs);
     const bannerPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(RADIUS * 5, 1.1),
-      new THREE.MeshBasicMaterial({ map: bannerTex, transparent: true, opacity: 0.82, side: THREE.DoubleSide })
+      // F1: 横幅也缩小，opacity 降低
+      new THREE.PlaneGeometry(RADIUS * 3.0, 0.9),
+      new THREE.MeshBasicMaterial({ map: bannerTex, transparent: true, opacity: 0.18, side: THREE.DoubleSide })
     );
     bannerPlane.position.set(0, 6.2, -(RADIUS * 2.7));
     bannerPlane.userData.wcBanner = true;
@@ -1638,18 +1640,22 @@ window.Scene3D = (() => {
     currentSpeakerId = id;
     const n = nodes[id]; if (!n) return;
     // 降低效果强度，减少突兀感
-    n.light.intensity = 3.0; n.light.distance = 16;
+    n.light.intensity = 3.5; n.light.distance = 18;
     n.sprite.scale.setScalar(2.5);
-    if (n.hex) { n.hex.material.emissiveIntensity = 0.9; }
-    if (n.beam) { n.beam.material.opacity = .16; }
+    if (n.hex) { n.hex.material.emissiveIntensity = 1.0; }
+    // F6: 发言时光束加强
+    if (n.beam) { n.beam.material.opacity = .28; }
+    // F12: 音波扩散动画
+    spawnSoundWave(id);
     setEnergyArc(id);
     setSpeakingHalo(id);
     AGENT_ORDER.forEach(o => { if (o !== id) _dim(o, true); });
     // 仅在需要移动摄像机时才切换视角（reaction 不移动，避免来回跳）
     if (moveCam !== false) {
-      const SAFE_Y = 5.2;
-      const horizOff = -n.x * 0.6;
-      const camZ = Math.max(9, 14 - Math.abs(horizOff) * 0.2);
+      // F2: 发言时摄像机拉近（9→7），更能看清 agent 面部
+      const SAFE_Y = 4.8;
+      const horizOff = -n.x * 0.55;
+      const camZ = Math.max(7, 11 - Math.abs(horizOff) * 0.2);
       camState.pos.set(horizOff, SAFE_Y, camZ);
       camState.look.set(n.x * 0.4, 2.2, n.z * 0.25);
       camLerp = 0.07;
@@ -1685,17 +1691,31 @@ window.Scene3D = (() => {
     n.beam.material.opacity = heavy ? .03 : .055;
   }
 
+  // F8: pivot 立场转向时，给 agent 的光束和 hex 发出一次"颜色闪烁"效果
+  const PICK_COLORS = { home: 0x2266ee, draw: 0xc8a832, away: 0xee2233 };
+  function flashPivotColor(id, newPick) {
+    const n = nodes[id]; if (!n) return;
+    const pc = PICK_COLORS[newPick] || COLORS[id];
+    // 短暂把 light 颜色切换到立场色，2s 后恢复
+    n.light.color.setHex(pc);
+    setTimeout(() => { if (n.light) n.light.color.setHex(COLORS[id]); }, 2000);
+    spawnSoundWave(id);
+    spawnBurst(id);
+  }
+
   function resetAll() {
     currentSpeakerId = null;
     AGENT_ORDER.forEach(id => {
       const n = nodes[id]; if (!n) return;
       n.light.intensity = .5; n.light.distance = 10;
+      n.light.color.setHex(COLORS[id]);
       n.sprite.scale.setScalar(2.2);
       n.hex.material.emissiveIntensity = .2;
       n.beam.material.opacity = .055;
     });
-    camState.pos.set(0, 4.5, 18);
-    camState.look.set(0, 2.2, 0);
+    // F2: 默认摄像机拉近（18→13）让 agent 更大
+    camState.pos.set(0, 4.0, 13);
+    camState.look.set(0, 2.0, 0);
     camLerp = 0.048;
     clearEnergyArc();
     clearSpeakingHalo();
@@ -1704,6 +1724,57 @@ window.Scene3D = (() => {
   }
 
   // ── Particle bursts ──────────────────────────────────────
+  // F12: 音波扩散圆环（发言时从 agent 位置向外扩散）
+  const soundWaves = [];
+  function spawnSoundWave(id) {
+    const n = nodes[id]; if (!n) return;
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.5, 0.025, 6, 32),
+      new THREE.MeshBasicMaterial({ color: COLORS[id], transparent: true, opacity: 0.7 })
+    );
+    ring.position.set(n.x, 1.6, n.z);
+    ring.rotation.x = Math.PI / 2;
+    scene.add(ring);
+    soundWaves.push({ ring, life: 1.0, speed: 1.8 });
+  }
+  function tickSoundWaves(dt) {
+    for (let i = soundWaves.length - 1; i >= 0; i--) {
+      const w = soundWaves[i];
+      w.life -= dt * 1.1;
+      if (w.life <= 0) { scene.remove(w.ring); w.ring.geometry.dispose(); w.ring.material.dispose(); soundWaves.splice(i, 1); continue; }
+      w.ring.scale.setScalar(1 + (1 - w.life) * w.speed * 3);
+      w.ring.material.opacity = Math.max(0, w.life * 0.7);
+    }
+  }
+
+  // F7: 中央能量光圈（空闲时）
+  const energyRings = [];
+  let energyRingTimer = 0;
+  function spawnEnergyRing() {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.4, 0.02, 6, 32),
+      new THREE.MeshBasicMaterial({ color: 0xc8a832, transparent: true, opacity: 0.5 })
+    );
+    ring.position.set(0, 0.15, 0);
+    ring.rotation.x = Math.PI / 2;
+    scene.add(ring);
+    energyRings.push({ ring, life: 1.0 });
+  }
+  function tickEnergyRings(dt) {
+    energyRingTimer += dt;
+    if (!currentSpeakerId && energyRingTimer > 1.4) {
+      energyRingTimer = 0;
+      spawnEnergyRing();
+    }
+    for (let i = energyRings.length - 1; i >= 0; i--) {
+      const e = energyRings[i];
+      e.life -= dt * 0.5;
+      if (e.life <= 0) { scene.remove(e.ring); e.ring.geometry.dispose(); e.ring.material.dispose(); energyRings.splice(i, 1); continue; }
+      e.ring.scale.setScalar(1 + (1 - e.life) * 6);
+      e.ring.material.opacity = Math.max(0, e.life * 0.45);
+    }
+  }
+
   function spawnBurst(id) {
     const n = nodes[id]; if (!n) return;
     const cnt = 80, pos = new Float32Array(cnt*3), vel = [];
@@ -1832,6 +1903,8 @@ window.Scene3D = (() => {
     camera.lookAt(camCurLook);
 
     tickBursts(dt);
+    tickSoundWaves(dt);   // F12 音波
+    tickEnergyRings(dt);  // F7 能量光圈
     renderer.render(scene, camera);
   }
 
@@ -1844,5 +1917,5 @@ window.Scene3D = (() => {
     statsBoardTex.needsUpdate = true;
   }
 
-  return { init, setAgentSpeaking, setAgentHighlight, setAgentThinking, resetAll, updateStatsDisplay, loadPlayerBanners };
+  return { init, setAgentSpeaking, setAgentHighlight, setAgentThinking, resetAll, updateStatsDisplay, loadPlayerBanners, flashPivotColor };
 })();

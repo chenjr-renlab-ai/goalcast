@@ -11,8 +11,8 @@
 <!-- ── TOP BAR ── -->
 <header class="top-bar">
   <div class="tb-brand">
-    <span class="tb-brand-main">⚽ ORACLE COUNCIL</span>
-    <span class="tb-brand-wc">FIFA · WORLD CUP 2026 · PREDICTOR</span>
+    <span class="tb-brand-main">⚽ 预言者议会</span>
+    <span class="tb-brand-wc">2026 FIFA 世界杯 · AI 预言议会</span>
   </div>
   <div class="tb-match">
     <div class="tb-team home">
@@ -40,7 +40,7 @@
       <div class="phase-step" data-phase="vote">终投</div>
     </div>
     <div class="live-badge" id="liveBadge"><div class="live-dot"></div>LIVE</div>
-    <button class="version-badge" onclick="toggleChangelog()">v4.6</button>
+    <button class="version-badge" onclick="toggleChangelog()">v4.9</button>
   </div>
 </header>
 
@@ -52,6 +52,24 @@
       <button onclick="toggleChangelog()">✕</button>
     </div>
     <div class="cl-body">
+      <div class="cl-ver">v4.9 <span class="cl-date">2026-04-29</span></div>
+      <ul>
+        <li>世界杯主题转型：品牌改为"2026 FIFA世界杯 · AI预言议会"</li>
+        <li>WC深海蓝+FIFA金配色（替换英超草绿方案）</li>
+        <li>Agent卡片三态设计：空闲展示方法/盲点/命中率</li>
+        <li>初判进度指示器（第X/5位正在分析）</li>
+        <li>3D议事厅：背景板缩小、摄像机拉近、中央能量光圈</li>
+        <li>发言时音波扩散动画；pivot立场转向颜色切换</li>
+        <li>概率条空闲状态提示；快速押注3按钮（主胜/平/客胜）</li>
+        <li>结束后自动弹出分享预览；下一场推荐卡片</li>
+        <li>LocalStorage 本地战绩记录</li>
+      </ul>
+      <div class="cl-ver">v4.8 <span class="cl-date">2026-04-29</span></div>
+      <ul>
+        <li>火山方舟 DeepSeek-v3.2 替换 Moonshot；初判串行化</li>
+        <li>流式输出 TTFT ~1s；speaking_start 立即触发 3D 动画</li>
+        <li>终投五人差异化视角；JSON mode 替代 tool_choice</li>
+      </ul>
       <div class="cl-ver">v4.6 <span class="cl-date">2026-04-28</span></div>
       <ul>
         <li>Agent 3D 形象重绘：Pixar 风虹膜+瞳孔+眉毛，眨眼动画</li>
@@ -92,7 +110,7 @@
 <div class="prob-bar-wrap" id="probBarWrap">
   <div class="prob-bar-teams">
     <span id="probHomeLabel">主队</span>
-    <span class="prob-bar-center-label">预 测 走 势</span>
+    <span class="prob-bar-center-label" id="probCenterLabel">🔮 召开议会以获取 AI 预测</span>
     <span id="probAwayLabel">客队</span>
   </div>
   <div class="prob-bar-track" id="probBarTrack">
@@ -137,7 +155,8 @@
       <div class="hud-corner tr"></div>
       <div class="hud-corner bl"></div>
       <div class="hud-corner br"></div>
-      <div class="scene3d-label">⚽ ORACLE COUNCIL · 2026 FIFA WORLD CUP PREDICTOR ◈</div>
+      <div class="scene3d-label">⚽ 预言者议会 · AI预测议事厅</div>
+      <div class="council-progress" id="councilProgress" style="display:none"></div>
       <div class="speaker-hud" id="speakerHud">
         <div class="speaker-hud-icon" id="speakerHudIcon"></div>
         <div class="speaker-hud-name" id="speakerHudName"></div>
@@ -236,6 +255,12 @@
   <div class="control-left">
     <div id="featuredMatchBanner" class="featured-banner" style="display:none"></div>
     <select class="match-selector" id="matchSel" onchange="onMatchChange(event)"></select>
+    <!-- 快速押注区（3个大按钮）-->
+    <div class="quick-pick-row" id="quickPickRow">
+      <button class="qp-btn qp-home" id="qpHome" onclick="setQuickPick('home')"></button>
+      <button class="qp-btn qp-draw" id="qpDraw" onclick="setQuickPick('draw')">平局</button>
+      <button class="qp-btn qp-away" id="qpAway" onclick="setQuickPick('away')"></button>
+    </div>
     <div class="ctrl-btn-row">
       <button class="start-btn" id="startBtn" onclick="startCouncil()">⚡ 召开议会</button>
       <button class="info-toggle" id="infoToggle" onclick="toggleMatchDrawer()" title="比赛详情">📋</button>
