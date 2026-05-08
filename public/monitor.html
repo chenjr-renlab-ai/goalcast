@@ -102,8 +102,14 @@
       </div>
     </div>
 
+    <!-- 用户行为分析 -->
+    <div class="panel">
+      <div class="panel-title">用户行为 · Analytics 埋点</div>
+      <div id="analyticsPanel" style="font-size:11px;line-height:1.8;color:rgba(200,210,230,0.7)">加载中…</div>
+    </div>
+
     <!-- 实时事件流 -->
-    <div class="panel" style="grid-column: 1 / -1">
+    <div class="panel">
       <div class="panel-title">共享记忆流 · 实时事件</div>
       <div class="event-stream" id="eventStream">
         <div style="color:rgba(255,255,255,0.2)">等待数据...</div>
@@ -200,6 +206,38 @@
       if (!Object.keys(perfData).length && !dones.length) return;
       // extract from monitorLog
     }
+
+    // Analytics 数据加载（每30秒刷新）
+    async function loadAnalytics() {
+      try {
+        const res = await fetch('/api/analytics?limit=200').then(r => r.json());
+        const events = res.events || [];
+        const el = document.getElementById('analyticsPanel');
+        if (!el) return;
+        const counts = {};
+        events.forEach(e => { counts[e.event] = (counts[e.event] || 0) + 1; });
+        const councilStarts = counts['council_start'] || 0;
+        const councilCompletes = counts['council_complete'] || 0;
+        const shareClicks = counts['share_click'] || 0;
+        const pageviews = counts['pageview'] || 0;
+        const retention5s = counts['5s_retention'] || 0;
+        const completionRate = councilStarts > 0 ? Math.round(councilCompletes / councilStarts * 100) : 0;
+        const retentionRate = pageviews > 0 ? Math.round(retention5s / pageviews * 100) : 0;
+        el.innerHTML = `
+          <div>📊 总埋点: ${events.length}</div>
+          <div>👁️ 页面浏览: ${pageviews}</div>
+          <div>⏱️ 5s留存率: ${retentionRate}% (${retention5s}/${pageviews})</div>
+          <div>▶️ 议会启动: ${councilStarts}</div>
+          <div>✅ 议会完成: ${councilCompletes}</div>
+          <div>📈 完成率: ${completionRate}%</div>
+          <div>📸 分享点击: ${shareClicks}</div>
+          <div style="margin-top:8px;color:#4a9eff">🎯 评估体系基准</div>
+          <div style="color:${completionRate>=45?'#2ed573':'#ff6b6b'}">完成率: ${completionRate}% (目标≥45%)</div>
+          <div style="color:${retentionRate>=60?'#2ed573':'#ff6b6b'}">5s留存: ${retentionRate}% (目标≥60%)</div>`;
+      } catch(e) { console.warn('[analytics]', e.message); }
+    }
+    loadAnalytics();
+    setInterval(loadAnalytics, 30000);
 
     connect();
   </script>

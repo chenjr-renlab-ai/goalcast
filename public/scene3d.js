@@ -9,8 +9,12 @@ window.Scene3D = (() => {
   // 使右列 agent (gambler,psych,moderator) 落在 3D 右侧，左列 (stat,mystic,history) 落在左侧。
   const AGENT_ORDER = ['moderator','gambler','psych','stat','history','mystic'];
   const COLORS = {
-    stat:0x4a9eff, mystic:0xbf5fff, history:0xffaa00,
-    gambler:0x00e096, psych:0x00d2d3, moderator:0xffd700,
+    stat:0x33aaff,    // 鲜亮蓝
+    mystic:0xcc55ff,  // 鲜亮紫
+    history:0xffbb00, // 鲜亮金
+    gambler:0x00ff99, // 鲜亮绿
+    psych:0x00ffee,   // 鲜亮青
+    moderator:0xffee00, // 纯金黄
   };
   const ICONS  = { stat:'📊', mystic:'🔮', history:'📜', gambler:'🎰', psych:'🧠', moderator:'⚖️' };
   const NAMES  = { stat:'Dr.冰狗', mystic:'月影姐', history:'老球迷', gambler:'赌狗本狗', psych:'碎碎念', moderator:'议长' };
@@ -45,7 +49,7 @@ window.Scene3D = (() => {
     renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
 
     scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x020d08, 0.020);
+    scene.fog = new THREE.FogExp2(0x080018, 0.012); // 适度雾（减少遮挡）
 
     camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.3, 200);
     camera.position.copy(camState.pos);
@@ -63,29 +67,46 @@ window.Scene3D = (() => {
 
   // ── Scene build ──────────────────────────────────────────
   function buildScene() {
-    // 升级灯光：演播厅风格
-    scene.add(new THREE.AmbientLight(0x0a1020, 3.5));
+    // 演播厅级别灯光系统
+    scene.add(new THREE.AmbientLight(0x201040, 6.0)); // 增强紫色环境光
 
-    // 主顶灯
-    const mainLight = new THREE.DirectionalLight(0x7088cc, 1.2);
-    mainLight.position.set(0, 12, 4); scene.add(mainLight);
+    // 主顶灯（白蓝）
+    const mainLight = new THREE.DirectionalLight(0x9966ff, 1.6);
+    mainLight.position.set(0, 14, 4); scene.add(mainLight);
 
-    // 舞台绿白球场光
-    const stageLight = new THREE.PointLight(0x334422, 1.8, 35);
-    stageLight.position.set(0, 8, 0); scene.add(stageLight);
+    // 中央舞台光（紫白混合）
+    const stageLight = new THREE.PointLight(0x6633ff, 2.5, 30);
+    stageLight.position.set(0, 9, 0); scene.add(stageLight);
 
-    // 左右侧面渐变光（球场聚光灯暖白）
-    const sideL = new THREE.SpotLight(0x88aaff, 1.5, 30, Math.PI/5, 0.3);
-    sideL.position.set(-12, 8, 0); sideL.target.position.set(0, 0, 0);
+    // 左侧蓝色聚光
+    const sideL = new THREE.SpotLight(0x0066ff, 2.2, 32, Math.PI/6, 0.35);
+    sideL.position.set(-13, 9, 0); sideL.target.position.set(0, 0, 0);
     scene.add(sideL); scene.add(sideL.target);
 
-    const sideR = new THREE.SpotLight(0x88aaff, 1.2, 30, Math.PI/5, 0.3);
-    sideR.position.set(12, 8, 0); sideR.target.position.set(0, 0, 0);
+    // 右侧红紫聚光
+    const sideR = new THREE.SpotLight(0xff0066, 2.0, 32, Math.PI/6, 0.35);
+    sideR.position.set(13, 9, 0); sideR.target.position.set(0, 0, 0);
     scene.add(sideR); scene.add(sideR.target);
 
-    // 后部填充光
-    const backLight = new THREE.PointLight(0x000833, 1.2, 22);
-    backLight.position.set(0, 3, -12); scene.add(backLight);
+    // 后填充（深蓝）
+    const backLight = new THREE.PointLight(0x110044, 1.8, 24);
+    backLight.position.set(0, 3, -14); scene.add(backLight);
+
+    // 动态彩色追光（呼吸变化）
+    const followL1 = new THREE.SpotLight(0x0099ff, 2.8, 28, Math.PI/7, 0.45);
+    followL1.position.set(-9, 10, 3); followL1.target.position.set(0,0,0);
+    scene.add(followL1); scene.add(followL1.target);
+    followL1.userData.stageLight = true;
+
+    const followL2 = new THREE.SpotLight(0xff2288, 2.4, 28, Math.PI/7, 0.45);
+    followL2.position.set(9, 10, 3); followL2.target.position.set(0,0,0);
+    scene.add(followL2); scene.add(followL2.target);
+    followL2.userData.stageLight = true;
+
+    const followL3 = new THREE.SpotLight(0x00ffcc, 1.8, 22, Math.PI/5, 0.4);
+    followL3.position.set(0, 11, -7); followL3.target.position.set(0,0,0);
+    scene.add(followL3); scene.add(followL3.target);
+    followL3.userData.stageLight = true;
 
     // 场景元素
     makeStadiumStands(); makeStudioWalls();
@@ -94,6 +115,85 @@ window.Scene3D = (() => {
     AGENT_ORDER.forEach((id, i) => makeThrone(id, i));
     makeBroadcastDesks();
     makeCenterFootball();
+    makeRenLabFloorLogo(); // ren-lab 品牌地板
+  }
+
+  // ── ren-lab 品牌地板 Logo ────────────────────────────────────
+  function makeRenLabFloorLogo() {
+    const cvs = document.createElement('canvas');
+    cvs.width = 512; cvs.height = 256;
+    const ctx = cvs.getContext('2d');
+    ctx.clearRect(0, 0, 512, 256);
+
+    // 底层圆形光晕
+    const halo = ctx.createRadialGradient(256, 128, 0, 256, 128, 140);
+    halo.addColorStop(0, 'rgba(200,168,50,0.10)');
+    halo.addColorStop(0.7, 'rgba(200,168,50,0.04)');
+    halo.addColorStop(1, 'transparent');
+    ctx.fillStyle = halo; ctx.fillRect(0, 0, 512, 256);
+
+    // 外圆环
+    ctx.beginPath(); ctx.arc(256, 128, 122, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(200,168,50,0.22)'; ctx.lineWidth = 1.5; ctx.stroke();
+    // 内圆环
+    ctx.beginPath(); ctx.arc(256, 128, 108, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(200,168,50,0.10)'; ctx.lineWidth = 1; ctx.stroke();
+
+    // 十字准星（科技感）
+    const cross = (x1,y1,x2,y2) => { ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); };
+    ctx.strokeStyle = 'rgba(200,168,50,0.18)'; ctx.lineWidth = 1;
+    cross(256-130, 128, 256-80, 128); cross(256+80, 128, 256+130, 128);
+    cross(256, 128-70, 256, 128-20); cross(256, 128+20, 256, 128+70);
+
+    // 圆环刻度点（12个）
+    for (let i = 0; i < 12; i++) {
+      const a = (i/12)*Math.PI*2 - Math.PI/2;
+      const isMain = i % 3 === 0;
+      const r = isMain ? 3 : 1.5;
+      ctx.beginPath();
+      ctx.arc(256 + Math.cos(a)*122, 128 + Math.sin(a)*122, r, 0, Math.PI*2);
+      ctx.fillStyle = isMain ? 'rgba(200,168,50,0.45)' : 'rgba(200,168,50,0.25)';
+      ctx.fill();
+    }
+
+    // ren-lab 主文字
+    ctx.font = 'bold 52px "Courier New", Consolas, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(200,168,50,0.9)'; ctx.shadowBlur = 22;
+    ctx.fillStyle = 'rgba(200,168,50,0.70)';
+    ctx.fillText('ren-lab', 256, 112);
+    ctx.shadowBlur = 0;
+
+    // ORACLE COUNCIL 副文字
+    ctx.font = '13px "Arial", sans-serif';
+    ctx.fillStyle = 'rgba(200,168,50,0.38)';
+    ctx.letterSpacing = '4px';
+    ctx.fillText('ORACLE  COUNCIL', 256, 152);
+
+    // 底部点缀线
+    ctx.strokeStyle = 'rgba(200,168,50,0.15)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(180, 165); ctx.lineTo(332, 165); ctx.stroke();
+
+    const tex = new THREE.CanvasTexture(cvs);
+    // 地板版（平躺，大号）
+    const logoFloor = new THREE.Mesh(
+      new THREE.PlaneGeometry(8.0, 4.0),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false })
+    );
+    logoFloor.rotation.x = -Math.PI / 2;
+    logoFloor.position.set(0, 0.03, 0);
+    logoFloor.userData.renLabLogo = true;
+    scene.add(logoFloor);
+
+    // 倾斜 Billboard 版（朝向相机，位于议事厅前方地面上方），更清晰可见
+    const logoBillboard = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.5, 2.25),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false })
+    );
+    logoBillboard.rotation.x = -Math.PI * 0.28; // 向前倾斜，对准相机
+    logoBillboard.position.set(0, 0.6, 3.2);     // 在前方地面微微抬起
+    logoBillboard.userData.renLabLogo = true;
+    scene.add(logoBillboard);
   }
 
   // ── 悬浮赛况大屏 ─────────────────────────────────────────────
@@ -101,21 +201,22 @@ window.Scene3D = (() => {
     const W = 1024, H = 256;
     ctx.clearRect(0, 0, W, H);
 
-    // 背景渐变（中间实、两端透明）
+    // 背景渐变（紫黑，两端透明）
     const bg = ctx.createLinearGradient(0, 0, W, 0);
-    bg.addColorStop(0,   'rgba(0,20,8,0)');
-    bg.addColorStop(0.08,'rgba(0,20,8,0.93)');
-    bg.addColorStop(0.92,'rgba(0,20,8,0.93)');
-    bg.addColorStop(1,   'rgba(0,20,8,0)');
+    bg.addColorStop(0,   'rgba(8,0,20,0)');
+    bg.addColorStop(0.07,'rgba(10,2,25,0.95)');
+    bg.addColorStop(0.93,'rgba(10,2,25,0.95)');
+    bg.addColorStop(1,   'rgba(8,0,20,0)');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
-    // 顶部金绿渐变分隔线
+    // 顶部彩虹渐变分隔线
     const topLine = ctx.createLinearGradient(0, 0, W, 0);
     topLine.addColorStop(0, 'transparent');
-    topLine.addColorStop(0.2, 'rgba(0,212,106,0.7)');
-    topLine.addColorStop(0.8, 'rgba(200,168,50,0.7)');
+    topLine.addColorStop(0.15, 'rgba(0,238,255,0.9)');
+    topLine.addColorStop(0.5, 'rgba(255,204,0,0.9)');
+    topLine.addColorStop(0.85, 'rgba(170,68,255,0.9)');
     topLine.addColorStop(1, 'transparent');
-    ctx.strokeStyle = topLine; ctx.lineWidth = 2;
+    ctx.strokeStyle = topLine; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(W, 2); ctx.stroke();
 
     // 队名
@@ -140,44 +241,54 @@ window.Scene3D = (() => {
     ctx.fillStyle = 'rgba(0,212,106,0.55)';
     ctx.fillText('A I   P R E D I C T I O N', W / 2, 75);
 
-    // 概率条
-    const BAR_X = 56, BAR_Y = 95, BAR_H = 34, BAR_W = W - 112;
+    // 概率条（更鲜艳的颜色）
+    const BAR_X = 56, BAR_Y = 95, BAR_H = 38, BAR_W = W - 112;
     const hW = BAR_W * homeP / 100;
     const dW = BAR_W * drawP / 100;
     const aW = BAR_W * awayP / 100;
 
-    // 主队（蓝）
-    ctx.fillStyle = 'rgba(30,80,190,0.82)';
-    ctx.fillRect(BAR_X, BAR_Y, hW, BAR_H);
-    // 平局（绿）
-    ctx.fillStyle = 'rgba(0,130,50,0.75)';
-    ctx.fillRect(BAR_X + hW, BAR_Y, dW, BAR_H);
-    // 客队（红）
-    ctx.fillStyle = 'rgba(170,30,40,0.82)';
-    ctx.fillRect(BAR_X + hW + dW, BAR_Y, aW, BAR_H);
+    // 发光底层
+    ctx.shadowBlur = 12;
+    // 主队（电蓝）
+    ctx.shadowColor = 'rgba(0,120,255,0.6)';
+    const hGrad = ctx.createLinearGradient(BAR_X, 0, BAR_X + hW, 0);
+    hGrad.addColorStop(0, 'rgba(5,40,200,0.9)'); hGrad.addColorStop(1, 'rgba(0,100,255,0.85)');
+    ctx.fillStyle = hGrad; ctx.fillRect(BAR_X, BAR_Y, hW, BAR_H);
+    // 平局（暗金）
+    ctx.shadowColor = 'rgba(200,150,0,0.5)';
+    const dGrad = ctx.createLinearGradient(BAR_X + hW, 0, BAR_X + hW + dW, 0);
+    dGrad.addColorStop(0, 'rgba(80,50,0,0.9)'); dGrad.addColorStop(1, 'rgba(100,65,0,0.85)');
+    ctx.fillStyle = dGrad; ctx.fillRect(BAR_X + hW, BAR_Y, dW, BAR_H);
+    // 客队（鲜红）
+    ctx.shadowColor = 'rgba(255,0,50,0.6)';
+    const aGrad = ctx.createLinearGradient(BAR_X + hW + dW, 0, BAR_X + BAR_W, 0);
+    aGrad.addColorStop(0, 'rgba(180,0,30,0.85)'); aGrad.addColorStop(1, 'rgba(220,0,40,0.9)');
+    ctx.fillStyle = aGrad; ctx.fillRect(BAR_X + hW + dW, BAR_Y, aW, BAR_H);
+    ctx.shadowBlur = 0;
 
-    // 条上百分比标注
-    ctx.font = 'bold 18px Arial,sans-serif';
-    ctx.fillStyle = '#ffffff';
-    if (hW > 55) { ctx.textAlign = 'center'; ctx.fillText(`${Math.round(homeP)}%`, BAR_X + hW / 2, BAR_Y + 23); }
-    if (dW > 55) { ctx.textAlign = 'center'; ctx.fillText(`${Math.round(drawP)}%`, BAR_X + hW + dW / 2, BAR_Y + 23); }
-    if (aW > 55) { ctx.textAlign = 'center'; ctx.fillText(`${Math.round(awayP)}%`, BAR_X + hW + dW + aW / 2, BAR_Y + 23); }
+    // 条上百分比标注（更大更亮）
+    ctx.font = 'bold 22px Arial,sans-serif';
+    ctx.fillStyle = '#ffffff'; ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
+    if (hW > 60) { ctx.textAlign = 'center'; ctx.fillText(`${Math.round(homeP)}%`, BAR_X + hW / 2, BAR_Y + 26); }
+    if (dW > 60) { ctx.textAlign = 'center'; ctx.fillText(`${Math.round(drawP)}%`, BAR_X + hW + dW / 2, BAR_Y + 26); }
+    if (aW > 60) { ctx.textAlign = 'center'; ctx.fillText(`${Math.round(awayP)}%`, BAR_X + hW + dW + aW / 2, BAR_Y + 26); }
+    ctx.shadowBlur = 0;
 
     // 标签行
-    ctx.font = '14px "PingFang SC","Microsoft YaHei",Arial,sans-serif';
-    ctx.fillStyle = 'rgba(200,220,255,0.55)';
-    ctx.textAlign = 'left';  ctx.fillText('主队胜', BAR_X, BAR_Y + BAR_H + 22);
-    ctx.textAlign = 'center'; ctx.fillText('平  局', W / 2, BAR_Y + BAR_H + 22);
-    ctx.textAlign = 'right';  ctx.fillText('客队胜', BAR_X + BAR_W, BAR_Y + BAR_H + 22);
+    ctx.font = 'bold 14px "PingFang SC","Microsoft YaHei",Arial,sans-serif';
+    ctx.textAlign = 'left';  ctx.fillStyle = '#66aaff'; ctx.fillText('主队胜', BAR_X, BAR_Y + BAR_H + 22);
+    ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,204,0,0.8)'; ctx.fillText('平  局', W / 2, BAR_Y + BAR_H + 22);
+    ctx.textAlign = 'right';  ctx.fillStyle = '#ff7788'; ctx.fillText('客队胜', BAR_X + BAR_W, BAR_Y + BAR_H + 22);
 
-    // 底部分隔线
-    const botLine = ctx.createLinearGradient(0, H - 2, W, H - 2);
+    // 底部彩色分隔线
+    const botLine = ctx.createLinearGradient(0, H-2, W, H-2);
     botLine.addColorStop(0, 'transparent');
-    botLine.addColorStop(0.3, 'rgba(200,168,50,0.35)');
-    botLine.addColorStop(0.7, 'rgba(0,212,106,0.35)');
+    botLine.addColorStop(0.25, 'rgba(0,238,255,0.5)');
+    botLine.addColorStop(0.5, 'rgba(255,204,0,0.5)');
+    botLine.addColorStop(0.75, 'rgba(170,68,255,0.5)');
     botLine.addColorStop(1, 'transparent');
-    ctx.strokeStyle = botLine; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(0, H - 3); ctx.lineTo(W, H - 3); ctx.stroke();
+    ctx.strokeStyle = botLine; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, H-3); ctx.lineTo(W, H-3); ctx.stroke();
   }
 
   function makeStatsBoardPlane() {
@@ -188,10 +299,11 @@ window.Scene3D = (() => {
 
     statsBoardTex = new THREE.CanvasTexture(cvs);
     const plane = new THREE.Mesh(
-      new THREE.PlaneGeometry(RADIUS * 4.4, RADIUS * 1.1),
-      new THREE.MeshBasicMaterial({ map: statsBoardTex, transparent: true, opacity: 0.75, side: THREE.DoubleSide })
+      // 缩小并后移：不要遮挡 agent，作为背景装饰
+      new THREE.PlaneGeometry(RADIUS * 3.6, RADIUS * 0.9),
+      new THREE.MeshBasicMaterial({ map: statsBoardTex, transparent: true, opacity: 0.80, side: THREE.DoubleSide })
     );
-    plane.position.set(0, 5.2, -(RADIUS * 1.6));
+    plane.position.set(0, 4.6, -(RADIUS * 2.55)); // 推后到 agent 后方
     plane.userData.statsBoard = true;
     scene.add(plane);
   }
@@ -423,10 +535,10 @@ window.Scene3D = (() => {
       })));
     });
 
-    // 看台顶部边缘霓虹灯带（世界杯绿+金）
-    [{ r: RADIUS * 2.4, col: 0x00aa44, op: 0.25 },
-     { r: RADIUS * 2.95, col: 0xc8a832, op: 0.15 },
-     { r: RADIUS * 3.52, col: 0x00aa44, op: 0.12 }].forEach(({ r, col, op }) => {
+    // 看台顶部边缘霓虹灯带（鲜艳多彩）
+    [{ r: RADIUS * 2.4, col: 0x00ffaa, op: 0.35 },
+     { r: RADIUS * 2.95, col: 0xaa44ff, op: 0.25 },
+     { r: RADIUS * 3.52, col: 0x00ccff, op: 0.18 }].forEach(({ r, col, op }) => {
       const ledRing = new THREE.Mesh(
         new THREE.TorusGeometry(r, 0.025, 4, 80),
         new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op })
@@ -472,34 +584,39 @@ window.Scene3D = (() => {
     bigScreenCvs.width = 1024; bigScreenCvs.height = 512;
     const bsCtx = bigScreenCvs.getContext('2d');
 
-    // 屏幕背景：深色+渐变
+    // 屏幕背景：深紫黑渐变
     const bsGrad = bsCtx.createLinearGradient(0, 0, 0, 512);
-    bsGrad.addColorStop(0, 'rgba(0,18,8,0.98)');
-    bsGrad.addColorStop(1, 'rgba(0,10,4,0.98)');
+    bsGrad.addColorStop(0, 'rgba(8,0,20,0.98)');
+    bsGrad.addColorStop(0.5, 'rgba(12,0,28,0.96)');
+    bsGrad.addColorStop(1, 'rgba(5,0,12,0.98)');
     bsCtx.fillStyle = bsGrad; bsCtx.fillRect(0, 0, 1024, 512);
 
-    // 上方绿金色分隔线
+    // 顶部彩虹渐变线
     const topGrad = bsCtx.createLinearGradient(0, 0, 1024, 0);
     topGrad.addColorStop(0, 'transparent');
-    topGrad.addColorStop(0.15, 'rgba(0,200,80,0.8)');
-    topGrad.addColorStop(0.85, 'rgba(200,160,40,0.8)');
+    topGrad.addColorStop(0.1, '#ff2244');
+    topGrad.addColorStop(0.3, '#ffcc00');
+    topGrad.addColorStop(0.5, '#00ffaa');
+    topGrad.addColorStop(0.7, '#00eeff');
+    topGrad.addColorStop(0.9, '#aa44ff');
     topGrad.addColorStop(1, 'transparent');
-    bsCtx.strokeStyle = topGrad; bsCtx.lineWidth = 3;
-    bsCtx.beginPath(); bsCtx.moveTo(0, 6); bsCtx.lineTo(1024, 6); bsCtx.stroke();
+    bsCtx.strokeStyle = topGrad; bsCtx.lineWidth = 4;
+    bsCtx.beginPath(); bsCtx.moveTo(0, 5); bsCtx.lineTo(1024, 5); bsCtx.stroke();
 
-    // FIFA WORLD CUP 2026 主标题
-    bsCtx.font = 'bold 72px Arial, sans-serif';
+    // FIFA WORLD CUP 2026 主标题（更鲜艳）
+    bsCtx.font = 'bold 68px Arial, sans-serif';
     bsCtx.textAlign = 'center'; bsCtx.textBaseline = 'middle';
-    bsCtx.fillStyle = '#c8a832';
-    bsCtx.shadowColor = '#00d46a'; bsCtx.shadowBlur = 24;
-    bsCtx.fillText('FIFA WORLD CUP 2026', 512, 130);
+    bsCtx.fillStyle = '#ffcc00';
+    bsCtx.shadowColor = '#aa44ff'; bsCtx.shadowBlur = 30;
+    bsCtx.fillText('FIFA WORLD CUP 2026', 512, 125);
     bsCtx.shadowBlur = 0;
 
     // 副标题
-    bsCtx.font = 'bold 32px Arial, sans-serif';
-    bsCtx.fillStyle = 'rgba(0,212,106,0.85)';
-    bsCtx.letterSpacing = '8px';
-    bsCtx.fillText('ORACLE COUNCIL · AI PREDICTION', 512, 210);
+    bsCtx.font = 'bold 30px Arial, sans-serif';
+    bsCtx.fillStyle = '#00ffaa';
+    bsCtx.shadowColor = '#00ffaa'; bsCtx.shadowBlur = 12;
+    bsCtx.fillText('ORACLE COUNCIL · AI PREDICTION', 512, 205);
+    bsCtx.shadowBlur = 0;
 
     // 中间分隔线
     bsCtx.strokeStyle = 'rgba(200,168,50,0.3)'; bsCtx.lineWidth = 1;
@@ -517,13 +634,26 @@ window.Scene3D = (() => {
       bsCtx.shadowBlur = 0;
     });
 
-    // 底部装饰
+    // 底部标语
     bsCtx.font = '22px Arial, sans-serif';
     bsCtx.fillStyle = 'rgba(200,220,255,0.3)';
     bsCtx.letterSpacing = '4px';
-    bsCtx.fillText('PREDICT · DEBATE · DECIDE', 512, 420);
+    bsCtx.fillText('PREDICT · DEBATE · DECIDE', 512, 390);
+
+    // ren-lab 品牌署名（右下角）
+    bsCtx.font = 'bold 18px "Courier New", monospace';
+    bsCtx.textAlign = 'right';
+    bsCtx.fillStyle = 'rgba(200,168,50,0.55)';
+    bsCtx.shadowColor = 'rgba(200,168,50,0.4)'; bsCtx.shadowBlur = 8;
+    bsCtx.fillText('ren-lab', 998, 450);
+    bsCtx.shadowBlur = 0;
+
+    // ren-lab 小圆点装饰
+    bsCtx.beginPath(); bsCtx.arc(962, 445, 4, 0, Math.PI*2);
+    bsCtx.fillStyle = 'rgba(200,168,50,0.45)'; bsCtx.fill();
 
     // 底部金线
+    bsCtx.textAlign = 'center';
     bsCtx.strokeStyle = topGrad; bsCtx.lineWidth = 2;
     bsCtx.beginPath(); bsCtx.moveTo(0, 505); bsCtx.lineTo(1024, 505); bsCtx.stroke();
 
@@ -606,45 +736,59 @@ window.Scene3D = (() => {
     pitchCanvas.width = 512; pitchCanvas.height = 512;
     const pitchCtx = pitchCanvas.getContext('2d');
 
-    // 绿草条纹背景（深浅交替，真实球场感）
-    const stripeH = 512 / 10;
-    for (let i = 0; i < 10; i++) {
-      pitchCtx.fillStyle = i % 2 === 0 ? '#1a4a1a' : '#1d521d';
+    // 草坪条纹（更鲜明的深浅交替）
+    const stripeH = 512 / 12;
+    for (let i = 0; i < 12; i++) {
+      pitchCtx.fillStyle = i % 2 === 0 ? '#183a18' : '#1d4a1d';
       pitchCtx.fillRect(0, i * stripeH, 512, stripeH);
     }
 
-    // 白色场地标线
-    pitchCtx.strokeStyle = 'rgba(255,255,255,0.55)';
+    // 中央金色光晕（ren-lab 效果）
+    const centerGlow = pitchCtx.createRadialGradient(256, 256, 0, 256, 256, 120);
+    centerGlow.addColorStop(0, 'rgba(200,168,50,0.12)');
+    centerGlow.addColorStop(0.6, 'rgba(200,168,50,0.04)');
+    centerGlow.addColorStop(1, 'transparent');
+    pitchCtx.fillStyle = centerGlow; pitchCtx.fillRect(0, 0, 512, 512);
+
+    // 场地标线
+    pitchCtx.strokeStyle = 'rgba(255,255,255,0.60)';
     pitchCtx.lineWidth = 3;
 
-    // 中圈
-    pitchCtx.beginPath();
-    pitchCtx.arc(256, 256, 96, 0, Math.PI * 2);
-    pitchCtx.stroke();
+    // 中圈（双环）
+    pitchCtx.beginPath(); pitchCtx.arc(256, 256, 98, 0, Math.PI*2); pitchCtx.stroke();
+    pitchCtx.strokeStyle = 'rgba(255,255,255,0.20)'; pitchCtx.lineWidth = 1.5;
+    pitchCtx.beginPath(); pitchCtx.arc(256, 256, 108, 0, Math.PI*2); pitchCtx.stroke();
 
     // 中点
-    pitchCtx.beginPath();
-    pitchCtx.arc(256, 256, 6, 0, Math.PI * 2);
-    pitchCtx.fillStyle = 'rgba(255,255,255,0.55)';
-    pitchCtx.fill();
+    pitchCtx.beginPath(); pitchCtx.arc(256, 256, 6, 0, Math.PI*2);
+    pitchCtx.fillStyle = 'rgba(255,255,255,0.60)'; pitchCtx.fill();
 
     // 中线
-    pitchCtx.lineWidth = 3;
-    pitchCtx.beginPath();
-    pitchCtx.moveTo(0, 256); pitchCtx.lineTo(512, 256);
-    pitchCtx.stroke();
+    pitchCtx.strokeStyle = 'rgba(255,255,255,0.55)'; pitchCtx.lineWidth = 3;
+    pitchCtx.beginPath(); pitchCtx.moveTo(0, 256); pitchCtx.lineTo(512, 256); pitchCtx.stroke();
 
     // 外边框
-    pitchCtx.strokeStyle = 'rgba(255,255,255,0.35)';
-    pitchCtx.lineWidth = 4;
-    pitchCtx.strokeRect(20, 20, 472, 472);
+    pitchCtx.strokeStyle = 'rgba(255,255,255,0.40)'; pitchCtx.lineWidth = 4;
+    pitchCtx.strokeRect(18, 18, 476, 476);
+    // 内边框
+    pitchCtx.strokeStyle = 'rgba(255,255,255,0.15)'; pitchCtx.lineWidth = 1.5;
+    pitchCtx.strokeRect(28, 28, 456, 456);
+
+    // 禁区线
+    pitchCtx.strokeStyle = 'rgba(255,255,255,0.35)'; pitchCtx.lineWidth = 2;
+    [[18,156,96,200],[398,156,96,200]].forEach(([x,y,w,h]) => pitchCtx.strokeRect(x,y,w,h));
+    [[18,196,48,120],[446,196,48,120]].forEach(([x,y,w,h]) => pitchCtx.strokeRect(x,y,w,h));
+
+    // 角球弧
+    [[18,18],[494,18],[18,494],[494,494]].forEach(([cx,cy]) => {
+      pitchCtx.beginPath(); pitchCtx.arc(cx, cy, 20, 0, Math.PI*2);
+      pitchCtx.strokeStyle='rgba(255,255,255,0.25)'; pitchCtx.lineWidth=1.5; pitchCtx.stroke();
+    });
 
     // 禁区弧
-    pitchCtx.strokeStyle = 'rgba(255,255,255,0.3)';
-    pitchCtx.lineWidth = 2;
-    pitchCtx.beginPath();
-    pitchCtx.arc(256, 256, 148, -Math.PI * 0.35, Math.PI * 0.35);
-    pitchCtx.stroke();
+    pitchCtx.strokeStyle = 'rgba(255,255,255,0.25)'; pitchCtx.lineWidth = 2;
+    pitchCtx.beginPath(); pitchCtx.arc(256, 256, 152, -Math.PI*0.32, Math.PI*0.32); pitchCtx.stroke();
+    pitchCtx.beginPath(); pitchCtx.arc(256, 256, 152, Math.PI*0.68, Math.PI*1.32); pitchCtx.stroke();
 
     const pitchTexture = new THREE.CanvasTexture(pitchCanvas);
     pitchTexture.wrapS = pitchTexture.wrapT = THREE.RepeatWrapping;
@@ -689,12 +833,25 @@ window.Scene3D = (() => {
     const stage = new THREE.Mesh(stageGeo, stageMat);
     stage.position.y = 0.05; scene.add(stage);
 
+    // 地板镜面反光层（提升3D质感）
+    const mirrorGeo = new THREE.CircleGeometry(RADIUS * 3.5, 64);
+    const mirrorMat = new THREE.MeshStandardMaterial({
+      color: 0x020810,
+      metalness: 0.85,
+      roughness: 0.1,
+      transparent: true,
+      opacity: 0.55,
+    });
+    const mirror = new THREE.Mesh(mirrorGeo, mirrorMat);
+    mirror.rotation.x = -Math.PI/2; mirror.position.y = -0.005;
+    scene.add(mirror);
+
     // 地板中心发光圈（保持 floorGlow 引用供动画使用）
     floorGlow = new THREE.Mesh(
-      new THREE.CircleGeometry(RADIUS * 1.8, 64),
-      new THREE.MeshBasicMaterial({ color:0x2233ff, transparent:true, opacity:.035, side:THREE.DoubleSide })
+      new THREE.CircleGeometry(RADIUS * 2.2, 64),
+      new THREE.MeshBasicMaterial({ color:0x8833ff, transparent:true, opacity:.06, side:THREE.DoubleSide })
     );
-    floorGlow.rotation.x = -Math.PI/2; floorGlow.position.y = .006;
+    floorGlow.rotation.x = -Math.PI/2; floorGlow.position.y = .009;
     floorGlow.userData.isFloorGlow = true;
     scene.add(floorGlow);
   }
@@ -903,8 +1060,8 @@ window.Scene3D = (() => {
     const hairColor  = HAIR_COLORS[id]  || 0x222222;
     const pantsColor = PANTS_COLORS[id] || 0x111122;
 
-    // 材质：shirtColor 同时作为 emissive，角色在暗场景中会发出自身颜色的微光
-    const mat = (col, rough=0.75, metal=0.15, emissive=null, emInt=0.28) =>
+    // 材质：shirtColor 同时作为 emissive，角色在暗场景中会发出自身颜色的强光
+    const mat = (col, rough=0.70, metal=0.15, emissive=null, emInt=0.55) =>
       new THREE.MeshStandardMaterial({
         color: col, roughness: rough, metalness: metal,
         emissive: emissive ?? col,
@@ -1118,8 +1275,8 @@ window.Scene3D = (() => {
     sprite.position.y = 2.80; sprite.scale.set(2.2, 0.56, 1);
     g.add(sprite);
 
-    // Point light（从胸部位置）
-    const light = new THREE.PointLight(color, .5, 10);
+    // Point light（从胸部位置，增强自发光效果）
+    const light = new THREE.PointLight(color, 1.2, 12);
     light.position.y = 1.5; g.add(light);
 
     nodes[id] = { g, hex, beam, orbRing, orbRing2, sprite, light, pillar, edgeRing, angle, x, z, mouth: mouthGroup, head, eyeMeshes };
@@ -1852,6 +2009,20 @@ window.Scene3D = (() => {
       n.orbRing.rotation.x   = Math.sin(t*.6+n.angle)*.38;
       n.orbRing2.rotation.y += dt*1.8;
       n.orbRing2.rotation.x  = Math.cos(t*.5+n.angle)*.5;
+    });
+
+    // ren-lab 地板 Logo 脉冲
+    scene.children.forEach(c => {
+      if (c.userData.renLabLogo) {
+        c.material.opacity = 0.50 + Math.sin(t * 0.75) * 0.18;
+      }
+    });
+
+    // 动态追光缓慢变色（演出效果）
+    scene.children.forEach(c => {
+      if (c.userData.stageLight) {
+        c.intensity = 1.5 + Math.sin(t * 0.4 + c.position.x * 0.3) * 0.7;
+      }
     });
 
     // Center objects

@@ -12,7 +12,7 @@ async function ensureMemoryDir() {
 }
 
 function makeAgentProfile() {
-  return { total: 0, correct: 0, byType: {} };
+  return { total: 0, correct: 0, byType: {}, brierSum: 0, brierCount: 0 };
 }
 
 async function loadOrInitLongTerm() {
@@ -147,7 +147,33 @@ export async function updateAgentAccuracy(agentId, prediction, outcome) {
 
 export async function getAgentProfiles() {
   const data = await loadOrInitLongTerm();
+  // 附加 Brier Score 平均值
+  for (const id of AGENT_IDS) {
+    const p = data.agentProfiles[id];
+    if (p && p.brierCount > 0) {
+      p.brierScoreAvg = parseFloat((p.brierSum / p.brierCount).toFixed(3));
+    }
+  }
   return data.agentProfiles;
+}
+
+// 更新 agent 的 Brier Score（三元预测概率校准度量）
+// probs: { home, draw, away } 各 0-100 范围；outcome: 'home'|'draw'|'away'
+export async function updateAgentBrierScore(agentId, probs, outcome) {
+  await ensureMemoryDir();
+  const data = await loadOrInitLongTerm();
+  if (!data.agentProfiles[agentId]) data.agentProfiles[agentId] = makeAgentProfile();
+  const p = data.agentProfiles[agentId];
+  const ph = (probs.home || 0) / 100;
+  const pd = (probs.draw || 0) / 100;
+  const pa = (probs.away || 0) / 100;
+  const oh = outcome === 'home' ? 1 : 0;
+  const od = outcome === 'draw' ? 1 : 0;
+  const oa = outcome === 'away' ? 1 : 0;
+  const bs = (ph - oh) ** 2 + (pd - od) ** 2 + (pa - oa) ** 2;
+  p.brierSum = (p.brierSum || 0) + bs;
+  p.brierCount = (p.brierCount || 0) + 1;
+  await saveLongTerm(data);
 }
 
 export function calcScoreHitLevel(predicted, actual) {

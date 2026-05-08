@@ -441,11 +441,32 @@ async function fetchAccuracyProfiles() {
   } catch { /* silent fail */ }
 }
 
+// ── 世界杯倒计时 ─────────────────────────────────────────
+function initWcCountdown() {
+  const WC_DATE = new Date('2026-06-11T20:00:00+08:00'); // 2026 WC开幕
+  function update() {
+    const now = new Date();
+    const diff = WC_DATE - now;
+    if (diff <= 0) {
+      // 世界杯已开始
+      const el = document.getElementById('eplWarmupBar');
+      if (el) el.innerHTML = `<span class="ewb-icon">🌍</span><span class="ewb-text" style="color:#f0d060">FIFA 世界杯 2026 进行中！</span>`;
+      return;
+    }
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const daysEl = document.getElementById('wcDays');
+    if (daysEl) daysEl.textContent = days;
+  }
+  update();
+  setInterval(update, 60000);
+}
+
 // ── Init ─────────────────────────────────────────────────
 async function init() {
   injectOverlays();
   buildAgentColumns();
   buildCouncilSeats();
+  initWcCountdown();
   const canvas = document.getElementById('threeCanvas');
   if (canvas && window.THREE && window.Scene3D) Scene3D.init(canvas);
   await Promise.all([loadMatches(), fetchAccuracyProfiles()]);
@@ -458,6 +479,10 @@ async function init() {
   // N12: 移动端 agent 网格
   buildMobileAgentGrid();
 
+  // 埋点：页面加载 + 5s留存检测
+  trackEvent('pageview', { referrer: document.referrer || 'direct' });
+  setTimeout(() => trackEvent('5s_retention', { still_here: true }), 5000);
+
   // I-2: SSE 页面关闭时主动断开，防止服务端 token 泄漏
   window.addEventListener('beforeunload', () => { currentEs?.close(); currentEs = null; });
   document.addEventListener('visibilitychange', () => {
@@ -465,7 +490,7 @@ async function init() {
   });
 
   // U1: Onboarding — 版本号机制，大改动时递增版本使其再次弹出
-  const ONBOARDING_VER = 'oracle_visited_v3';
+  const ONBOARDING_VER = 'oracle_visited_v6'; // v6.x ren-lab重设计版
   if (!localStorage.getItem(ONBOARDING_VER)) {
     const ol = document.getElementById('onboardingOverlay');
     if (ol) ol.style.display = 'flex';
@@ -520,6 +545,12 @@ function makeAgentCard(id) {
   div.className = 'agent-card';
   div.id = `card-${id}`;
   div.style.setProperty('--agent-color', a.cssColor);
+  // 提取 RGB 分量用于 rgba() 函数
+  const hexToRgb = h => {
+    const r = parseInt(h.slice(1,3),16), g = parseInt(h.slice(3,5),16), b = parseInt(h.slice(5,7),16);
+    return isNaN(r) ? '0,200,255' : `${r},${g},${b}`;
+  };
+  div.style.setProperty('--agent-rgb', hexToRgb(a.cssColor));
   div.innerHTML = `
     <div class="ac-scan"></div>
     <div class="ac-portrait">${a.icon}</div>
@@ -1190,19 +1221,45 @@ function updateMobileAgentStance(agentId, pick, conf) {
   if (!el) return;
   const m = currentMatchData;
   const labels = { home: `${m?.home||'主'}胜`, draw:'平', away: `${m?.away||'客'}胜` };
-  el.textContent = pick ? `${labels[pick]} ${Math.round((conf||.5)*100)}%` : '';
+  if (pick) {
+    el.textContent = `${labels[pick]} ${Math.round((conf||.5)*100)}%`;
+    el.className = `mag-stance mag-stance-${pick}`;
+  } else {
+    el.textContent = '';
+    el.className = 'mag-stance';
+  }
 }
 
-// N9: 首屏命中率聚合
+// 移动端流式文本简化显示（在 broadcast panel 较小时）
+function ensureMobileBroadcastVisible() {
+  const bp = document.getElementById('broadcastPanel');
+  if (!bp) return;
+  const isMobile = window.innerWidth < 600;
+  if (isMobile && bp.style.display === 'none') bp.style.display = '';
+}
+
+// N9: 首屏命中率聚合（增强：显示 Brier Score + 历史链接）
 function renderHomepageHitRate() {
   const profiles = agentAccuracyProfiles;
   const ids = Object.keys(profiles).filter(id => (profiles[id]?.total || 0) >= 3);
-  if (!ids.length) return;
+  const el = document.getElementById('seedsStatus');
+  if (!el) return;
+  if (!ids.length) {
+    el.innerHTML = `<span style="font-size:10px;color:var(--text-sub)">⚡ 暂无历史数据 · <a href="/history" style="color:var(--gold);text-decoration:none">查看准确率统计 →</a></span>`;
+    return;
+  }
   const total = ids.reduce((s, id) => s + (profiles[id].total || 0), 0);
   const correct = ids.reduce((s, id) => s + (profiles[id].correct || 0), 0);
   const pct = total > 0 ? Math.round(correct / total * 100) : 0;
-  const el = document.getElementById('seedsStatus');
-  if (el) el.innerHTML = `<span style="font-size:10px;color:var(--gold)">📊 近${total}场议会命中率 ${pct}%</span>`;
+  // 找准确率最高的 agent
+  const topAgent = ids.sort((a, b) => {
+    const pa = profiles[a].total ? profiles[a].correct / profiles[a].total : 0;
+    const pb = profiles[b].total ? profiles[b].correct / profiles[b].total : 0;
+    return pb - pa;
+  })[0];
+  const topAgentName = { stat:'冰狗', mystic:'月影姐', history:'老球迷', gambler:'赌狗', psych:'碎碎念' }[topAgent] || topAgent;
+  const topPct = profiles[topAgent]?.total ? Math.round(profiles[topAgent].correct / profiles[topAgent].total * 100) : 0;
+  el.innerHTML = `<span style="font-size:10px;color:var(--gold)">📊 近${total}场议会命中率 ${pct}% · 最准：${topAgentName} ${topPct}%</span>&nbsp;<a href="/history" style="font-size:10px;color:var(--neon-blue);text-decoration:none">详细记录 →</a>`;
 }
 
 function renderMatchPanel(m) {
@@ -1368,6 +1425,10 @@ function doStartCouncil() {
     else if (elapsed > 8000) ph.textContent = '🔗 正在连接议会...';
   }, 3000);
 
+  // 重置张力计
+  const tm = document.getElementById('tensionMeter');
+  if (tm) { tm.style.display = 'none'; const f = tm.querySelector('.tm-fill'); if (f) f.style.width = '0%'; }
+  trackEvent('council_start', { matchId, userPrediction, userScore });
   currentEs = new EventSource(`/api/run?matchId=${encodeURIComponent(matchId)}`);
   currentEs.onmessage = e => {
     lastMsgTime = Date.now();
@@ -1376,6 +1437,9 @@ function doStartCouncil() {
     if      (d.type==='phase')             handlePhase(d);
     else if (d.type==='thinking')          handleThinking(d);
     else if (d.type==='speaking_start')    setSpeaking(d.agentId);
+    else if (d.type==='speech_chunk')      handleSpeechChunk(d);
+    else if (d.type==='china_mode')        handleChinaMode(d);
+    else if (d.type==='match_mode')        handleMatchMode(d);
     else if (d.type==='message')           handleMessage(d);
     else if (d.type==='summary')           handleSummary(d);
     else if (d.type==='blackboard_update') handleBlackboardUpdate(d);
@@ -1486,6 +1550,8 @@ function handleBlackboardUpdate(d) {
   currentBlackboard = d.blackboard;
   renderStancePanel(currentBlackboard);
   if (currentBlackboard?.consensusLevel != null) renderConsensus(currentBlackboard.consensusLevel);
+  // 更新议会张力计（entropy + pivot count → tension score）
+  updateTensionMeter(currentBlackboard);
   updateStanceOnSeats(d.blackboard?.agentStances);
   // Signature Moment: stance flip
   const newPivots = d.blackboard?.pivotMoments?.length || 0;
@@ -1642,6 +1708,27 @@ function handleDevilReveal(d) {
   }
 }
 
+// ── 议会张力计 ────────────────────────────────────────────────
+function updateTensionMeter(blackboard) {
+  if (!blackboard) return;
+  const el = document.getElementById('tensionMeter');
+  if (!el) return;
+  // 张力 = 低共识（高分歧）+ 转向数
+  const consensus = blackboard.consensusLevel || 0;
+  const pivots = (blackboard.pivotMoments || []).length;
+  const disputes = (blackboard.disputes || []).length;
+  // 张力分：1-共识 + 转向权重 + 分歧权重（归一化到0-100）
+  const tension = Math.min(100, Math.round((1 - consensus) * 60 + pivots * 15 + disputes * 5));
+  const fill = el.querySelector('.tm-fill');
+  const label = el.querySelector('.tm-label');
+  if (fill) fill.style.width = `${tension}%`;
+  if (label) {
+    const level = tension >= 80 ? '🔥 极度紧张' : tension >= 55 ? '⚡ 高度对立' : tension >= 30 ? '📊 有分歧' : '🤝 趋于共识';
+    label.textContent = `${level} ${tension}`;
+  }
+  el.style.display = 'flex';
+}
+
 function renderStancePanel(blackboard) {
   if (!blackboard) return;
   const bp = document.getElementById('broadcastPanel');
@@ -1702,6 +1789,113 @@ function renderConsensus(level, container) {
   bar.innerHTML = html;
 }
 
+// ── 比赛模式横幅 ─────────────────────────────────────────────
+function handleMatchMode({ mode, label }) {
+  if (mode === 'epl') {
+    // 英超模式：更新 EPL 横幅为活跃态
+    const bar = document.getElementById('eplWarmupBar');
+    if (bar) {
+      bar.style.background = 'linear-gradient(90deg, rgba(0,30,8,0.99), rgba(0,25,10,0.97), rgba(0,30,8,0.99))';
+      bar.style.borderBottom = '1px solid rgba(0,200,80,0.35)';
+    }
+  } else if (mode === 'wc') {
+    // 世界杯模式：金色主题
+    const bar = document.getElementById('eplWarmupBar');
+    if (bar) {
+      bar.innerHTML = `<span>🌍</span><span style="color:#f0d060;font-weight:700">FIFA 世界杯 2026 · 正式赛事模式</span><span style="color:rgba(255,255,255,0.2)">|</span><span style="color:rgba(200,168,50,0.7);font-size:9px">by ren-lab</span>`;
+      bar.style.background = 'linear-gradient(90deg, rgba(20,12,0,0.99), rgba(25,18,0,0.97), rgba(20,12,0,0.99))';
+      bar.style.borderBottom = '1px solid rgba(200,168,50,0.25)';
+    }
+  }
+}
+
+// ── 中国队特殊模式 ────────────────────────────────────────────
+function handleChinaMode({ home, away }) {
+  document.body.classList.add('china-mode');
+  // 中国队金红特效横幅
+  const banner = document.createElement('div');
+  banner.className = 'china-mode-banner';
+  banner.innerHTML = `🇨🇳 <strong>${escapeHtml(home || '中国')} · 24年等待的时刻</strong> ·  2002年后首次进世界杯`;
+  document.body.appendChild(banner);
+  setTimeout(() => { banner.classList.add('cmb-fade'); setTimeout(() => banner.remove(), 800); }, 6000);
+  // 粒子特效（简版）
+  _spawnChinaParticles();
+}
+
+function _spawnChinaParticles() {
+  const N = 30;
+  for (let i = 0; i < N; i++) {
+    setTimeout(() => {
+      const p = document.createElement('div');
+      p.className = 'china-particle';
+      p.textContent = ['🌟','⭐','🇨🇳','✨','🔴'][Math.floor(Math.random()*5)];
+      p.style.cssText = `position:fixed;top:-20px;left:${Math.random()*100}%;font-size:${14+Math.random()*16}px;pointer-events:none;z-index:9999;animation:cpFall ${1.5+Math.random()*2}s ease-in forwards;`;
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 4000);
+    }, i * 150);
+  }
+}
+
+// ── 行为埋点（静默失败） ───────────────────────────────────────
+function trackEvent(event, data = {}) {
+  fetch('/api/analytics', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event, data, timestamp: Date.now() }),
+  }).catch(() => {});
+}
+
+// ── speech_chunk 渐进式文本展示 ──────────────────────────────
+function handleSpeechChunk({ agentId, phase, text }) {
+  const bp = document.getElementById('broadcastPanel');
+  let container = bp?.querySelector('.broadcast-content');
+  if (!container) {
+    if (!bp) return;
+    bp.innerHTML = '';
+    container = document.createElement('div');
+    container.className = 'broadcast-content';
+    bp.appendChild(container);
+  }
+
+  // 找到或创建当前 agent 的流式卡片
+  let streamCard = container.querySelector(`.bc-stream-card[data-agent="${agentId}"]`);
+  if (!streamCard) {
+    // 清掉同类旧卡（同一 agent 可能重复发言）
+    container.querySelectorAll('.bc-stream-card').forEach(c => c.remove());
+    const agent = AGENTS[agentId] || { name: agentId, icon: '?', cssColor: '#888', title: '' };
+    const phaseLabel = { opening:'开场', initial:'初判', debate:'对线', vote:'终投' }[phase] || phase;
+    streamCard = document.createElement('div');
+    streamCard.className = 'bc-card bc-stream-card bc-active';
+    streamCard.dataset.agent = agentId;
+    streamCard.style.setProperty('--agent-color', agent.cssColor);
+    streamCard.innerHTML = `
+      <div class="bc-compact-line">
+        <span class="bc-cl-icon">${agent.icon}</span>
+        <span class="bc-cl-name" style="color:${agent.cssColor}">${escapeHtml(agent.name)}</span>
+        <span class="bc-cl-phase">${phaseLabel}</span>
+      </div>
+      <div class="bc-accent-bar"></div>
+      <div class="bc-body-wrap">
+        <div class="bc-portrait">
+          <div class="bc-av">${agent.icon}</div>
+          <div class="bc-av-role">${escapeHtml(agent.title)}</div>
+        </div>
+        <div class="bc-content">
+          <div class="bc-stream-text"></div>
+          <span class="bc-typing-cursor">▋</span>
+        </div>
+      </div>`;
+    container.appendChild(streamCard);
+    bp.scrollTop = bp.scrollHeight;
+  }
+
+  const textEl = streamCard.querySelector('.bc-stream-text');
+  if (textEl) {
+    textEl.textContent += text;
+    bp.scrollTop = bp.scrollHeight;
+  }
+}
+
 function handleMessage(data) {
   // reaction: 只更新卡片高亮，不移动摄像机（两人连续快速互怼会导致摄像机来回跳）
   // 其他所有 phase: 正常更新卡片 + 摄像机
@@ -1737,6 +1931,17 @@ function handleMessage(data) {
   if (data.phase === 'initial' && data.structured?.score?.length >= 2) {
     agentPredictedScores[data.agentId] = data.structured.score;
     updateAgentScoreBadge(data.agentId, data.structured.score);
+  }
+
+  // 自动「封神金句」检测：catchphrase 含数字且含球员名则触发特效
+  if (data.catchphrase && (data.phase === 'initial' || data.phase === 'vote')) {
+    const hasNumber = /\d/.test(data.catchphrase);
+    const hasPlayer = Object.keys(PLAYER_WIKI).some(n => data.catchphrase.includes(n)) ||
+                      /[A-Z][a-z]+/.test(data.catchphrase);
+    if (hasNumber && hasPlayer) {
+      saveAgentCatchphrase(data.agentId, data.catchphrase);
+      triggerSignatureMoment('catchphrase', data.agentId, data.catchphrase, '');
+    }
   }
 
   // 英雄卡：initial+vote 阶段，只有找到球员才触发，不频繁显示同一球员
@@ -1802,7 +2007,7 @@ function updateBroadcast(data, agent) {
   const isMod = data.agentId === 'moderator';
   const badgeCls = { opening:'badge-opening', initial:'badge-initial', debate:'badge-debate', vote:'badge-vote', reaction:'' }[data.phase] || '';
 
-  // 每次新发言时清空旧卡片，只保留当前一张
+  // 每次新发言时清空旧卡片（含流式卡片），只保留当前一张
   // 旧卡片已在历史记录里，发言框只做"当前发言人"焦点
   container.querySelectorAll('.bc-card').forEach(c => c.remove());
 
@@ -1980,6 +2185,16 @@ function setSpeakingReaction(id) {
 
 // ── Summary ───────────────────────────────────────────────
 function handleSummary({ results, match, evHome, evDraw, evAway }) {
+  // 隐藏张力计
+  const tmEl = document.getElementById('tensionMeter');
+  if (tmEl) tmEl.style.display = 'none';
+  // 埋点：议会完成
+  trackEvent('council_complete', {
+    matchId: match?.matchId,
+    results,
+    userPrediction,
+    userScore,
+  });
   setSpeaking(null);
   document.getElementById('liveBadge').classList.remove('active');
   document.querySelectorAll('.phase-step').forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
@@ -2300,35 +2515,52 @@ function copyResultSummary() {
     ctx.beginPath(); ctx.moveTo(0, ly); ctx.lineTo(W, ly); ctx.stroke();
   }
 
-  // ── 外框 ──
+  // ── 外框（双层金色）──
   ctx.strokeStyle = '#c8a832'; ctx.lineWidth = 2.5;
   rr(10, 10, W-20, H-20, 10); ctx.stroke();
-  ctx.strokeStyle = 'rgba(200,168,50,.22)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(200,168,50,.18)'; ctx.lineWidth = 1;
   rr(16, 16, W-32, H-32, 7); ctx.stroke();
 
-  // 角装饰（L形）
-  const cs = 22;
+  // 角装饰（L形 + 圆点）
+  const cs = 26;
   ctx.strokeStyle = '#f0d060'; ctx.lineWidth = 3;
   [[14,14],[W-14,14],[14,H-14],[W-14,H-14]].forEach(([cx,cy]) => {
     const sx = cx < W/2 ? 1 : -1, sy = cy < H/2 ? 1 : -1;
     ctx.beginPath(); ctx.moveTo(cx+sx*cs, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy+sy*cs); ctx.stroke();
   });
+  // 小圆点
+  [[14,14],[W-14,14],[14,H-14],[W-14,H-14]].forEach(([cx,cy]) => {
+    ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2);
+    ctx.fillStyle = '#f0d060'; ctx.fill();
+  });
 
   // ── 顶栏 ──
-  ctx.fillStyle = 'rgba(200,168,50,.07)';
-  rr(10, 10, W-20, 52, 10); ctx.fill();
-  ctx.strokeStyle = 'rgba(200,168,50,.25)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(30, 62); ctx.lineTo(W-30, 62); ctx.stroke();
+  const tbGrad = ctx.createLinearGradient(10, 10, W-10, 62);
+  tbGrad.addColorStop(0, 'rgba(200,168,50,.15)');
+  tbGrad.addColorStop(0.5, 'rgba(200,168,50,.08)');
+  tbGrad.addColorStop(1, 'rgba(0,140,200,.10)');
+  ctx.fillStyle = tbGrad;
+  rr(10, 10, W-20, 54, 10); ctx.fill();
 
+  ctx.strokeStyle = 'rgba(200,168,50,.30)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(28, 64); ctx.lineTo(W-28, 64); ctx.stroke();
+
+  // 预言者议会 主标题
   ctx.textAlign = 'left';
   ctx.fillStyle = '#f0d060';
-  ctx.font = 'bold 15px "PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.fillText('🔮 预言者议会', 28, 43);
+  ctx.font = 'bold 16px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.shadowColor = 'rgba(200,168,50,0.5)'; ctx.shadowBlur = 8;
+  ctx.fillText('🔮 预言者议会', 28, 44);
+  ctx.shadowBlur = 0;
 
+  // ren-lab 徽章（右上）
   ctx.textAlign = 'right';
-  ctx.fillStyle = 'rgba(221,238,255,.45)';
-  ctx.font = '10px "PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.fillText(`AI 足球预测议会  ·  ${m?.stage || 'Premier League'}`, W-28, 43);
+  ctx.fillStyle = 'rgba(200,168,50,0.75)';
+  ctx.font = 'bold 10px "Courier New", monospace';
+  ctx.fillText('ren-lab', W-28, 38);
+  ctx.fillStyle = 'rgba(221,238,255,.40)';
+  ctx.font = '9px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText(`${m?.stage || 'PREMIER LEAGUE'}  ·  AI 预言议会`, W-28, 52);
 
   // ── 球队区块 ──
   // 主场
@@ -2465,20 +2697,38 @@ function copyResultSummary() {
     ctx.beginPath(); ctx.arc(dx, H-38, 1.5, 0, Math.PI*2); ctx.fill();
   }
 
+  // ── EV 指示器（如果有）──
+  const evSection = document.querySelector('.ev-row');
+  if (evSection) {
+    const evText = evSection.textContent.trim().slice(0, 60);
+    if (evText) {
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(200,168,50,0.7)';
+      ctx.font = '9px "PingFang SC","Microsoft YaHei",sans-serif';
+      ctx.fillText(`💰 ${evText}`, 36, H - 28);
+    }
+  }
+
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(255,255,255,.22)';
   ctx.font = '10px "PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.fillText('Goalcast AI  ·  Oracle Council Predictor  ·  goalcast.ai', CX, H-18);
+  ctx.fillText('Goalcast AI  ·  Oracle Council Predictor  ·  goalcast.ai', CX, H-14);
 
   // 右下小图标
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(200,168,50,.6)';
   ctx.font = '16px serif';
-  ctx.fillText('🔮', W-28, H-18);
+  ctx.fillText('🔮', W-28, H-14);
 
   // ── 复制 ──
   canvas.toBlob(blob => {
     if (!blob) { showToast('生成图片失败'); return; }
+    // 埋点：分享战报
+    trackEvent('share_click', {
+      matchId: currentMatchData?.matchId,
+      userPrediction,
+      catchphraseCount: sessionCatchphrases.length,
+    });
     if (navigator.clipboard?.write) {
       navigator.clipboard.write([new ClipboardItem({'image/png': blob})])
         .then(() => showToast('📸 战报图片已复制！可直接粘贴分享'))

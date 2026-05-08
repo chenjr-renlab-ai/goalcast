@@ -17,7 +17,7 @@ import {
 } from './dataFetcher.mjs';
 import { generateSeeds } from './seedGenerator.mjs';
 import { rebalance } from './rebalancer.mjs';
-import { loadLongTermMemory, getAgentProfiles, saveEpisode, updateAgentAccuracy } from './memory.mjs';
+import { loadLongTermMemory, getAgentProfiles, saveEpisode, updateAgentAccuracy, updateAgentBrierScore } from './memory.mjs';
 
 // ── .env 加载 ─────────────────────────────────────────────────
 try {
@@ -43,6 +43,7 @@ let currentSessionMonitor = [];      // 当前 /api/run 会话的事件队列（
 let currentBlackboard = null;        // 最新黑板快照
 let sessionActive = false;           // 是否有 /api/run 正在运行
 const prepareInProgress = new Set(); // 防止重复触发 prepare
+const analyticsEvents = [];          // 用户行为埋点（内存，最多10000条）
 
 // ── 比赛数据延迟补全 ─────────────────────────────────────────
 async function enrichMatchBriefing(match) {
@@ -206,13 +207,17 @@ async function enrichMatchBriefing(match) {
       })(),
       numerology: (() => {
         const d = new Date(match.utcDate || Date.now());
-        const day = d.getDate(), month = d.getMonth() + 1;
-        const sum = day + month;
-        const reduced = sum > 9 ? Math.floor(sum/10) + (sum%10) : sum;
-        const isFavorable = [3,6,9].includes(reduced);
-        const phases = ['新月静候', '上弦蓄势', '月满发力', '下弦收势'];
+        const day = d.getDate(), month = d.getMonth() + 1, year = d.getFullYear();
+        const hour = d.getHours();
+        const sum = day + month + (year % 100);
+        const reduced = Array.from(String(sum)).reduce((a, b) => a + parseInt(b), 0);
+        const finalReduced = reduced > 9 ? Array.from(String(reduced)).reduce((a, b) => a + parseInt(b), 0) : reduced;
+        const isFavorable = [3,6,9].includes(finalReduced);
+        const phases = ['新月↑主场积能', '上弦↑攻势明显', '满月↑比分预期高', '下弦↓防守主导'];
         const phase = phases[Math.floor(day / 8) % 4];
-        return `${month}/${day}日数字和${sum}→精简${reduced}，${isFavorable?'吉数主场占优':'数字不利，变数大'}；${phase}，${isFavorable?'主场气场更强':'客队能量涌动'}`;
+        const timeEnergy = hour >= 19 && hour <= 22 ? '黄金时段（19-22点能量峰值）' : hour >= 15 && hour < 19 ? '黄昏时段（情绪升温）' : '日场（理性为主）';
+        const historicColdRate = [2, 4, 7, 11].includes(finalReduced) ? '该数字日历史冷门率37%' : '该数字日历史热门守位率62%';
+        return `${month}/${day}数字精简→${finalReduced}（${isFavorable?'吉数':'凶数'}），${phase}；${timeEnergy}；${historicColdRate}`;
       })(),
       // 将球员数据通过特殊key传出，由prepare handler单独处理
       _homePlayers: homeFPL?.players || [],
@@ -410,11 +415,20 @@ app.get('/api/run', async (req, res) => {
     pushToMonitor({ ts: Date.now(), event });
   };
 
+  const sessionStart = Date.now();
   try {
     const agentProfiles = await getAgentProfiles().catch(() => ({}));
     await runCouncil(match, send, { rebalancedProbs: rebalancedResult, agentProfiles });
+    const duration = Date.now() - sessionStart;
+    // 服务端记录议会完成
+    analyticsEvents.push({
+      event: 'council_completed_server',
+      data: { matchId: match.matchId, durationMs: duration, model: process.env.VOLC_FAST_MODEL || 'deepseek-v3.2' },
+      ts: Date.now(),
+    });
     send({ type: 'done' });
   } catch (err) {
+    analyticsEvents.push({ event: 'council_error_server', data: { matchId: match.matchId, error: err.message }, ts: Date.now() });
     send({ type: 'error', message: err.message });
   } finally {
     sessionActive = false;
@@ -448,10 +462,10 @@ app.get('/api/monitor', (req, res) => {
   });
 });
 
-// ── POST /api/result（赛后录入实际比分，触发准确率更新）────────
+// ── POST /api/result（赛后录入实际比分，触发准确率+Brier更新）──
 app.post('/api/result', async (req, res) => {
   try {
-    const { matchId, actualScore } = req.body;
+    const { matchId, actualScore, councilProbs } = req.body;
     // actualScore: [homeGoals, awayGoals]，如 [2, 1]
     if (!actualScore || actualScore.length < 2) {
       return res.status(400).json({ error: '需要 actualScore: [homeGoals, awayGoals]' });
@@ -461,13 +475,22 @@ app.post('/api/result', async (req, res) => {
     const bb = currentBlackboard;
     if (!bb) return res.status(400).json({ error: '没有找到最近的议会数据，请先运行一次议会' });
 
-    // 更新各 agent 准确率
+    // 更新各 agent 准确率 + Brier Score
     const stances = bb.agentStances || {};
     const hitLevels = {};
     for (const [agentId, stance] of Object.entries(stances)) {
       if (stance.pick) {
         await updateAgentAccuracy(agentId, stance.pick, actualWinner);
         hitLevels[agentId] = stance.pick === actualWinner ? 'correct' : 'wrong';
+        // Brier Score：用 stance.conf 作为该选项的概率，其余均分
+        const conf = Math.max(0.05, Math.min(0.95, stance.conf || 0.5));
+        const remaining = (1 - conf) / 2;
+        const probs = {
+          home: stance.pick === 'home' ? conf * 100 : remaining * 100,
+          draw: stance.pick === 'draw' ? conf * 100 : remaining * 100,
+          away: stance.pick === 'away' ? conf * 100 : remaining * 100,
+        };
+        await updateAgentBrierScore(agentId, probs, actualWinner).catch(() => {});
       }
     }
 
@@ -479,6 +502,7 @@ app.post('/api/result', async (req, res) => {
       actualWinner,
       agentStances: stances,
       councilScore: bb.councilScore ?? null,
+      councilProbs: councilProbs || null,
       hitLevels,
     });
 
@@ -496,6 +520,110 @@ app.get('/api/memory/profiles', async (_req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── GET /api/memory/episodes（历史比赛记录）─────────────────────
+app.get('/api/memory/episodes', async (req, res) => {
+  try {
+    const { loadLongTermMemory } = await import('./memory.mjs').catch(() => ({ loadLongTermMemory: async () => ({ episodes: [] }) }));
+    const data = await loadLongTermMemory();
+    const limit = parseInt(req.query.limit) || 50;
+    res.json({ episodes: (data.episodes || []).slice(0, limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /history（历史准确率页）──────────────────────────────────
+app.get('/history', (_req, res) => {
+  const p = path.join(__dirname, 'public', 'history.html');
+  if (fs.existsSync(p)) return res.sendFile(p);
+  // 动态生成简易历史页
+  res.send(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>议会历史记录 — 预言者议会</title>
+  <style>
+    body { background:#020815; color:#e8f4ff; font-family:system-ui,sans-serif; padding:20px; max-width:960px; margin:0 auto; }
+    h1 { color:#c8a832; font-size:22px; margin-bottom:4px; }
+    .subtitle { color:rgba(232,244,255,0.5); font-size:13px; margin-bottom:24px; }
+    .back-btn { display:inline-block; color:#60a5fa; text-decoration:none; font-size:13px; margin-bottom:20px; }
+    .profiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin-bottom:32px; }
+    .profile-card { background:#060e1c; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:14px; }
+    .pc-name { font-weight:700; font-size:15px; margin-bottom:4px; }
+    .pc-stat { font-size:12px; color:rgba(232,244,255,0.5); }
+    .pc-pct { font-size:24px; font-weight:700; color:#c8a832; }
+    .pc-brier { font-size:11px; color:#60a5fa; margin-top:4px; }
+    .episodes { list-style:none; padding:0; }
+    .ep { background:#060e1c; border-radius:6px; padding:12px 16px; margin-bottom:8px; display:flex; gap:16px; align-items:center; font-size:13px; border-left:3px solid rgba(100,150,255,0.3); }
+    .ep-date { color:rgba(232,244,255,0.4); font-size:11px; white-space:nowrap; }
+    .ep-match { flex:1; font-weight:600; }
+    .ep-score { font-size:18px; font-weight:700; color:#f0d060; }
+    .ep-result { font-size:12px; padding:2px 8px; border-radius:10px; }
+    .ep-correct { background:rgba(0,200,100,0.15); color:#00e087; }
+    .ep-wrong { background:rgba(255,50,50,0.1); color:#ff6b6b; }
+    h2 { font-size:16px; color:#c8a832; margin:24px 0 12px; }
+    .empty { color:rgba(232,244,255,0.3); font-size:13px; text-align:center; padding:40px; }
+  </style>
+</head>
+<body>
+  <a class="back-btn" href="/">← 返回议会</a>
+  <h1>🔮 议会历史记录</h1>
+  <p class="subtitle">各 AI 议员历史预测准确率 · 更新于每场比赛结果录入后</p>
+  <h2>议员准确率排行</h2>
+  <div class="profiles" id="profiles">加载中…</div>
+  <h2>最近 50 场预测记录</h2>
+  <ul class="episodes" id="episodes"><li class="empty">加载中…</li></ul>
+  <script>
+    const AGENTS = {
+      stat:'Dr.冰狗 📊', mystic:'月影姐 🔮', history:'老球迷 📜',
+      gambler:'赌狗本狗 🎰', psych:'碎碎念 🧠',
+    };
+    async function loadProfiles() {
+      const res = await fetch('/api/memory/profiles').then(r => r.json());
+      const el = document.getElementById('profiles');
+      const entries = Object.entries(res).filter(([id]) => AGENTS[id]);
+      if (!entries.length) { el.innerHTML = '<div class="empty">暂无历史数据</div>'; return; }
+      entries.sort((a, b) => {
+        const pa = a[1].total ? a[1].correct/a[1].total : 0;
+        const pb = b[1].total ? b[1].correct/b[1].total : 0;
+        return pb - pa;
+      });
+      el.innerHTML = entries.map(([id, p]) => {
+        const pct = p.total ? Math.round(p.correct/p.total*100) : 0;
+        const brier = p.brierScoreAvg != null ? p.brierScoreAvg.toFixed(3) : '—';
+        return \`<div class="profile-card">
+          <div class="pc-name">\${AGENTS[id]}</div>
+          <div class="pc-pct">\${pct}%</div>
+          <div class="pc-stat">近 \${p.total} 场 · \${p.correct} 胜</div>
+          <div class="pc-brier">Brier: \${brier} (越低越准)</div>
+        </div>\`;
+      }).join('');
+    }
+    async function loadEpisodes() {
+      const res = await fetch('/api/memory/episodes?limit=50').then(r => r.json());
+      const el = document.getElementById('episodes');
+      if (!res.episodes?.length) { el.innerHTML = '<li class="empty">暂无记录，请在比赛结束后通过 POST /api/result 录入实际比分</li>'; return; }
+      el.innerHTML = res.episodes.map(ep => {
+        const d = new Date(ep.date);
+        const dateStr = d.toLocaleDateString('zh-CN', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+        const scoreStr = ep.actualScore ? ep.actualScore.join('-') : '?';
+        const correctCount = Object.values(ep.hitLevels||{}).filter(v => v==='correct').length;
+        return \`<li class="ep">
+          <span class="ep-date">\${dateStr}</span>
+          <span class="ep-match">\${ep.matchId || '未知对阵'}</span>
+          <span class="ep-score">\${scoreStr}</span>
+          <span class="ep-result \${correctCount >= 3 ? 'ep-correct' : 'ep-wrong'}">\${correctCount}/5 正确</span>
+        </li>\`;
+      }).join('');
+    }
+    loadProfiles().catch(console.error);
+    loadEpisodes().catch(console.error);
+  </script>
+</body>
+</html>`);
 });
 
 // ── monitor.html 独立路由（public/ 目录已由 static 覆盖，保留冗余兜底） ──
@@ -551,6 +679,20 @@ app.post('/api/generate-video', async (req, res) => {
     const msg = err.name === 'AbortError' ? 'timeout' : err.message;
     res.json({ error: msg });
   }
+});
+
+// ── 用户行为埋点 ──────────────────────────────────────────────
+app.post('/api/analytics', (req, res) => {
+  const { event, data, timestamp } = req.body || {};
+  if (!event) return res.status(400).json({ error: 'missing event' });
+  analyticsEvents.push({ event, data: data || {}, ts: timestamp || Date.now() });
+  if (analyticsEvents.length > 10000) analyticsEvents.splice(0, analyticsEvents.length - 10000);
+  res.json({ ok: true });
+});
+
+app.get('/api/analytics', (req, res) => {
+  const limit = parseInt(req.query.limit) || 500;
+  res.json({ total: analyticsEvents.length, events: analyticsEvents.slice(-limit) });
 });
 
 // 静态文件放在所有 API 路由之后（Express 5 兼容性）

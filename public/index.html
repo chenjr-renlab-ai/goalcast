@@ -8,10 +8,23 @@
 </head>
 <body>
 
+<!-- ── EPL 预热横幅（英超数据验证期）── -->
+<div class="epl-warmup-bar" id="eplWarmupBar">
+  <span class="ewb-icon">🏴󠁧󠁢󠁥󠁮󠁧󠁿</span>
+  <span class="ewb-text">英超赛季 · 世界杯数据预热进行中</span>
+  <span class="ewb-sep">|</span>
+  <span class="ewb-countdown" id="eplWcCountdown">🌍 距世界杯开赛 <strong id="wcDays">--</strong> 天</span>
+  <span class="ewb-sep">|</span>
+  <span class="ewb-hint">WC 2026 → 06/11</span>
+</div>
+
 <!-- ── TOP BAR ── -->
 <header class="top-bar">
   <div class="tb-brand">
-    <span class="tb-brand-main">⚽ 预言者议会</span>
+    <div class="tb-brand-row">
+      <span class="tb-brand-main">⚽ 预言者议会</span>
+      <span class="tb-renlab-badge">ren-lab</span>
+    </div>
     <span class="tb-brand-wc">2026 FIFA 世界杯 · AI 预言议会</span>
   </div>
   <div class="tb-match">
@@ -40,7 +53,7 @@
       <div class="phase-step" data-phase="vote">终投</div>
     </div>
     <div class="live-badge" id="liveBadge"><div class="live-dot"></div>LIVE</div>
-    <button class="version-badge" onclick="toggleChangelog()">v4.9</button>
+    <button class="version-badge" onclick="toggleChangelog()">v6.4</button>
   </div>
 </header>
 
@@ -48,21 +61,28 @@
 <div id="changelogModal" class="changelog-modal" style="display:none" onclick="if(event.target===this)toggleChangelog()">
   <div class="cl-inner">
     <div class="cl-head">
-      <span>📋 版本更新记录</span>
+      <span>📋 版本更新记录 <span style="color:rgba(200,168,50,0.7);font-size:9px;font-family:monospace;margin-left:8px">by ren-lab</span></span>
       <button onclick="toggleChangelog()">✕</button>
     </div>
     <div class="cl-body">
-      <div class="cl-ver">v4.9 <span class="cl-date">2026-04-29</span></div>
+      <div class="cl-ver">v6.3 <span class="cl-date">2026-05-06</span></div>
       <ul>
-        <li>世界杯主题转型：品牌改为"2026 FIFA世界杯 · AI预言议会"</li>
-        <li>WC深海蓝+FIFA金配色（替换英超草绿方案）</li>
-        <li>Agent卡片三态设计：空闲展示方法/盲点/命中率</li>
-        <li>初判进度指示器（第X/5位正在分析）</li>
-        <li>3D议事厅：背景板缩小、摄像机拉近、中央能量光圈</li>
-        <li>发言时音波扩散动画；pivot立场转向颜色切换</li>
-        <li>概率条空闲状态提示；快速押注3按钮（主胜/平/客胜）</li>
-        <li>结束后自动弹出分享预览；下一场推荐卡片</li>
-        <li>LocalStorage 本地战绩记录</li>
+        <li>🏷️ ren-lab 品牌植入：3D地板Logo+大屏署名+topbar徽章+分享卡</li>
+        <li>🏴󠁧󠁢󠁥󠁮󠁧󠁿 英超预热横幅：实时WC倒计时 · EPL/WC/中国队三模式专属提示词</li>
+        <li>🌍 世界杯过渡策略：自动识别比赛类型切换agent提示词背景</li>
+        <li>🎭 签名时刻重设计：渐变背景卡片+发光阴影+金句引用样式</li>
+        <li>🔥 金句自动特效：含球员名+数字的catchphrase自动触发封神动画</li>
+        <li>✨ 3D议事厅：ren-lab地板Logo+追光灯+地板镜面反光+深海蓝雾效</li>
+        <li>🎨 全面视觉升级：agent卡片渐变+广播面板优化+对线split-screen金色</li>
+        <li>📱 移动端：mag-agent色彩发光+speaking扩大效果</li>
+        <li>🤖 Agent精化：冰狗/赌狗禁止模糊描述，强制引用具体数字</li>
+      </ul>
+      <div class="cl-ver">v5.x <span class="cl-date">2026-05-06</span></div>
+      <ul>
+        <li>speech_chunk实时文本流；发散性注入防群体共识</li>
+        <li>Brier Score追踪；Rebalancer v2.0市场混合校准</li>
+        <li>混沌变量；中国队特殊模式；恶魔揭幕戏剧化</li>
+        <li>analytics埋点端点；历史准确率页；快速模型框架</li>
       </ul>
       <div class="cl-ver">v4.8 <span class="cl-date">2026-04-29</span></div>
       <ul>
@@ -155,7 +175,7 @@
       <div class="hud-corner tr"></div>
       <div class="hud-corner bl"></div>
       <div class="hud-corner br"></div>
-      <div class="scene3d-label">⚽ 预言者议会 · AI预测议事厅</div>
+      <div class="scene3d-label">⚽ 预言者议会 · AI预测议事厅 <span class="scene3d-renlab">by ren-lab</span></div>
       <div class="council-progress" id="councilProgress" style="display:none"></div>
       <div class="speaker-hud" id="speakerHud">
         <div class="speaker-hud-icon" id="speakerHudIcon"></div>
@@ -208,9 +228,22 @@
         <div class="ih-label">🔥 上一场金句</div>
         <div class="ih-text" id="ihText"></div>
       </div>
+      <!-- 议会张力计：实时显示辩论紧张程度 -->
+      <div id="tensionMeter" style="display:none;align-items:center;gap:8px;padding:4px 10px;background:rgba(0,0,0,0.5);border-radius:20px;position:absolute;top:10px;right:10px;z-index:30;min-width:150px;">
+        <div style="flex:1;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;">
+          <div class="tm-fill" style="height:100%;background:linear-gradient(90deg,#00e087,#f0c040,#ff4455);width:0%;transition:width 0.5s;border-radius:2px;"></div>
+        </div>
+        <span class="tm-label" style="font-size:9px;color:rgba(255,255,255,0.6);white-space:nowrap;">待机</span>
+      </div>
       <!-- 发言框：悬浮在 3D 场景底部 -->
       <div class="broadcast-panel" id="broadcastPanel">
-        <div class="broadcast-placeholder">⚖️ 预言者议会即将开始</div>
+        <div class="broadcast-placeholder" id="broadcastIdlePlaceholder">
+          <div style="text-align:center;padding:12px 8px;">
+            <div style="font-size:22px;margin-bottom:6px;">⚖️</div>
+            <div style="font-size:13px;font-weight:700;color:#c8a832;margin-bottom:4px;">预言者议会</div>
+            <div style="font-size:10px;color:rgba(232,244,255,0.4);line-height:1.5;">6位AI议员 · 方法论碰撞<br>实时辩论 · 集体预测</div>
+          </div>
+        </div>
       </div>
       <!-- 结果页：场景内居中覆盖层 -->
       <div id="resultsContainer"></div>
@@ -400,26 +433,32 @@
 <!-- H: Onboarding 首次访问引导 -->
 <div id="onboardingOverlay" class="onb-overlay" style="display:none">
   <div class="onb-panel">
-    <div class="onb-head">🔮 欢迎来到预言者议会</div>
+    <div class="onb-brand">
+      <span class="onb-brand-logo">🔮</span>
+      <div>
+        <div class="onb-head">预言者议会</div>
+        <div class="onb-subhead">by <span style="color:rgba(200,168,50,0.9);font-family:monospace">ren-lab</span> · 6 AI · 1 结果</div>
+      </div>
+    </div>
     <div class="onb-steps">
       <div class="onb-step">
-        <div class="onb-icon">⚽</div>
-        <div class="onb-title">选一场真实英超比赛</div>
-        <div class="onb-desc">赔率来自 bet365，球员数据来自 FPL，历史交锋来自 football-data.org</div>
+        <div class="onb-icon">🏴󠁧󠁢󠁥󠁮󠁧󠁿</div>
+        <div class="onb-title">英超预热 → 世界杯正赛</div>
+        <div class="onb-desc">现在用英超真实数据验证议会质量，世界杯 2026 开赛后（6/11）自动切换赛事模式</div>
       </div>
       <div class="onb-step">
         <div class="onb-icon">🎯</div>
-        <div class="onb-title">先押你的比分预测</div>
-        <div class="onb-desc">议会开始前你先亮底牌——最后看是你准还是 AI 准</div>
+        <div class="onb-title">押注比分 + 猜魔鬼代言人</div>
+        <div class="onb-desc">议会开始前先亮底牌。还有一位AI被故意给了偏颇信息——你能猜到是谁吗？</div>
       </div>
       <div class="onb-step">
         <div class="onb-icon">⚔️</div>
-        <div class="onb-title">看 6 个 AI 用不同数据辩论</div>
-        <div class="onb-desc">冰狗用Poisson概率，赌狗看盘口资金，碎碎念分析采访文本——方法不同，你来判断谁更可信</div>
+        <div class="onb-title">6 个 AI 用不同框架互怼</div>
+        <div class="onb-desc">冰狗=Poisson概率 · 赌狗=盘口资金 · 月影姐=叙事泡沫 · 老球迷=历史匹配 · 碎碎念=采访语义</div>
       </div>
     </div>
-    <button id="onbStart" class="onb-btn" onclick="localStorage.setItem('oracle_visited_v2','1');this.closest('.onb-overlay').style.display='none'">开始观战 →</button>
-    <div class="onb-skip" onclick="localStorage.setItem('oracle_visited_v2','1');this.closest('.onb-overlay').style.display='none'">我已了解，跳过</div>
+    <button id="onbStart" class="onb-btn" onclick="localStorage.setItem('oracle_visited_v6','1');this.closest('.onb-overlay').style.display='none'">开始观战 →</button>
+    <div class="onb-skip" onclick="localStorage.setItem('oracle_visited_v6','1');this.closest('.onb-overlay').style.display='none'">已了解，直接进入</div>
   </div>
 </div>
 
